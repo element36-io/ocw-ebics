@@ -1444,12 +1444,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "fiat-off-ramps"
+name = "fiat-ramps"
 version = "1.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
  "lite-json",
+ "log",
  "pallet-timestamp",
  "parity-scale-codec",
  "sp-arithmetic",
@@ -3703,7 +3704,7 @@ dependencies = [
 name = "node-template-runtime"
 version = "3.0.0"
 dependencies = [
- "fiat-off-ramps",
+ "fiat-ramps",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",

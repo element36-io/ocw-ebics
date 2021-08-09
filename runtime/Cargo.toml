@@ -37,7 +37,7 @@ std = [
     'pallet-grandpa/std',
     'pallet-randomness-collective-flip/std',
     'pallet-sudo/std',
-    'fiat-off-ramps/std',
+    'fiat-ramps/std',
     'pallet-timestamp/std',
     'pallet-transaction-payment-rpc-runtime-api/std',
     'pallet-transaction-payment/std',
@@ -132,9 +132,9 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 version = '3.0.0'
 
-[dependencies.fiat-off-ramps]
+[dependencies.fiat-ramps]
 default-features = false
-path = '../pallets/fiat-off-ramps'
+path = '../pallets/fiat-ramps'
 version = '1.0.0'
 
 [dependencies.pallet-timestamp]

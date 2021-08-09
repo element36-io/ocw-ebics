@@ -44,7 +44,7 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 /// Import the fiat-off-ramp pallet.
-pub use fiat_off_ramps;
+pub use fiat_ramps;
 
 /// An index to a block.
 pub type BlockNumber = u32;

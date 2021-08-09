@@ -1,5 +1,5 @@
 [package]
-name = "fiat-off-ramps"
+name = "fiat-ramps"
 version = "1.0.0"
 edition = "2018"
 authors = ['Dastanbek Samatov']
@@ -64,6 +64,10 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'monthly-2021-07'
 version = '3.0.0'
 
+[dependencies.log]
+version = "0.4.14"
+default-features = false
+
 [features]
 default = ['std']
 std = [
@@ -73,4 +77,5 @@ std = [
 	'sp-runtime/std',
 	'sp-std/std',
 	'sp-arithmetic/std',
+	'log/std'
 ]
