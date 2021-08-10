@@ -139,9 +139,14 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			let should_send = Self::should_sync(&block_number);
+			let mut should_sync = Self::should_sync(&block_number);
 
-			if !should_send {
+			// if we are in genesis, should sync 
+			if block_number == 0u32.into() {
+				should_sync = true;
+			}
+
+			if !should_sync {
 				return ;
 			}
 			let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
