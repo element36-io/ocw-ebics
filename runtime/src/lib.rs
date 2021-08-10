@@ -26,6 +26,7 @@ use sp_transaction_pool::TransactionPriority;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
+use frame_support::traits::Get;
 
 // A few exports that help ease life for downstream crates.
 pub use frame_support::{
@@ -274,8 +275,8 @@ impl pallet_sudo::Config for Runtime {
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 
 parameter_types! {
-	pub const GracePeriod: BlockNumber = 2;
-	pub const UnsignedInterval: BlockNumber = 2;
+	// interval in blocks between two consecutive unsigned transactions
+	pub const UnsignedInterval: BlockNumber = 3;
 	pub const UnsignedPriority: TransactionPriority = 1000;
 }
 
@@ -283,11 +284,9 @@ impl fiat_ramps::Config for Runtime {
 	type AuthorityId = fiat_ramps::crypto::TestAuthId;
 	type Event = Event;
 	type Call = Call;
-	type GracePeriod = BlockNumber;
-	type UnsignedInterval = BlockNumber;
-	type UnsignedPriority = TransactionPriority;
+	type UnsignedInterval = UnsignedInterval;
+	type UnsignedPriority = UnsignedPriority;
 }
-
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
 where

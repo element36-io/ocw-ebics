@@ -4,6 +4,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::ValidTransaction;
+use frame_support::traits::Get;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
 use sp_core::{crypto::KeyTypeId};
@@ -111,8 +112,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		// Constant that defines the interval between two unsigned transactions	
-		#[pallet::constant]
-		type GracePeriod: Get<Self::BlockNumber>;
+		// #[pallet::constant]
+		// type GracePeriod: Get<Self::BlockNumber>;
 
 		// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
 		#[pallet::constant]
@@ -138,7 +139,16 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			
+			let should_send = Self::should_sync(&block_number);
+
+			if !should_send {
+				return ;
+			}
+			let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
+
+			if let Err(e) = res {
+				log::error!("Error: {}", e);
+			}
 		}
 	}
 
@@ -149,7 +159,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			for iban_balance in iban_balances.iter() {
-				Self::add_balance(who, iban_balance);
+				Self::add_balance(&who, iban_balance);
 			}
 			Ok(().into())
 		}
@@ -163,7 +173,7 @@ pub mod pallet {
 			ensure_none(origin)?;
 			
 			for iban_balance in iban_balances.iter() {
-				Self::add_balance(Default::default(), iban_balance);
+				Self::add_balance(&Default::default(), iban_balance);
 			}
 
 			let current_block = <frame_system::Pallet<T>>::block_number();
@@ -223,25 +233,34 @@ impl<T: Config> Pallet<T> {
 	// choose transaction type: signed or unsigned
 	// currently supports only unsigned
 	// TO-DO: add signed transaction support
-	fn choose_transaction_type(block_number: T::BlockNumber) -> TransactionType {
-		const RECENTLY_SENT: () = ();
+	// fn choose_transaction_type(block_number: T::BlockNumber) -> TransactionType {
+	// 	const RECENTLY_SENT: () = ();
 
-		let val = StorageValueRef::persistent(b"fiat_ramps::last_send");
+	// 	let val = StorageValueRef::persistent(b"fiat_ramps::last_send");
 
-		let res = val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
-			match last_send {
-				Ok(Some(block)) if block_number < block + T::GracePeriod::get() => 
-				Err(RECENTLY_SENT),
-				_ => Ok(block_number)
-			}
-		});
-		match res {
-			Ok(block_number) => {
-				TransactionType::Raw
-			},
-			Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => TransactionType::None,
-			Err(MutateStorageError::ConcurrentModification(_)) => TransactionType::None,
+	// 	let res = val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
+	// 		match last_send {
+	// 			Ok(Some(block)) if block_number < block + T::UnsignedInterval::get() => 
+	// 			Err(RECENTLY_SENT),
+	// 			_ => Ok(block_number)
+	// 		}
+	// 	});
+	// 	match res {
+	// 		Ok(block_number) => {
+	// 			TransactionType::Raw
+	// 		},
+	// 		Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => TransactionType::None,
+	// 		Err(MutateStorageError::ConcurrentModification(_)) => TransactionType::None,
+	// 	}
+	// }
+	
+	// checks whether we should sync in this block number
+	fn should_sync(block_number: &T::BlockNumber) -> bool {
+		let next_sync_at = <NextSyncAt<T>>::get();
+		if &next_sync_at == block_number {
+			return true
 		}
+		false
 	}
 
 	// fetch json from the Ebics Service API using lite-json
@@ -275,31 +294,35 @@ impl<T: Config> Pallet<T> {
 	// fetches IBAN balance and submits unsigend transaction to the runtime
 	fn fetch_iban_balance_and_send_unsigned<'a>(
 		block_number: T::BlockNumber,
-	) -> Result<(), http::Error> {
+	) -> Result<(), &'static str> {
 		log::info!("fetching bank statements from API");
+
+		let next_sync_at = <NextSyncAt<T>>::get();
+
+		if next_sync_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
 
 		let json = Self::fetch_json(API_URL).unwrap();
 		let iban_balances = match Self::extract_iban_balances(json) {
 			Some(iban_balances) => Ok(iban_balances),
 			None => {
 			 	log::error!("Unable to extract iban balance from response");
-				Err(http::Error::Unknown)
+				Err("Unable to extract iban balances from response")
 			}
-		};
+		}?;
 
 		let call = Call::submit_balances_unsigned(
 			block_number,
-			iban_balances?
+			iban_balances
 		);
 
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).map_err(|_| {
-			// runtime_print!("Failed in offchain_unsigned_tx");
-			http::Error::Unknown
-		})
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|()| "Error sending unsigned transaction")
 	}
 
 	// From bank statemen extracts iban and closing balance
-	fn extract_iban_balance(json: JsonValue) -> Option<IbanBalance> {
+	fn extract_iban_balance(json: &JsonValue) -> Option<IbanBalance> {
 		let (iban_value, balance_value) = match json {
 			JsonValue::Object(obj) => {
 				let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("iban".chars())).unwrap();				
@@ -329,7 +352,7 @@ impl<T: Config> Pallet<T> {
 			JsonValue::Array(arr) => {
 				let mut balances: Vec<IbanBalance> = Vec::with_capacity(arr.capacity());
 				for val in arr.iter() {
-					balances.push(Self::extract_iban_balance(*val)?);
+					balances.push(Self::extract_iban_balance(val)?);
 				}
 				balances
 			},
@@ -338,8 +361,9 @@ impl<T: Config> Pallet<T> {
 		Some(iban_balances)
 	}
 
-	fn add_balance(who: T::AccountId, iban_balance: &IbanBalance) {
-		log::info!("Adding new iban balance: {:?} {} ", iban_balance.0, iban_balance.1);
+	fn add_balance(who: &T::AccountId, iban_balance: &IbanBalance) {
+		let iban_string = core::str::from_utf8(&iban_balance.0).unwrap();
+		log::info!("Adding new iban balance: {} {} ", iban_string, iban_balance.1);
 		<IbanBalances<T>>::insert(&iban_balance.0, iban_balance.1);
 	}
 
@@ -359,7 +383,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		ValidTransaction::with_tag_prefix("FiatRamps")
-			.priority(T::UnsignedPriority::get().saturating_add(iban_balances.capacity()))
+			.priority(T::UnsignedPriority::get().saturating_add(iban_balances.capacity() as u64))
 			.and_provides(next_sync_at)
 			.longevity(5)
 			.propagate(true)
