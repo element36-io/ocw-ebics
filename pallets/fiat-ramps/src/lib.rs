@@ -5,10 +5,10 @@
 use codec::{Decode, Encode};
 use frame_support::pallet_prelude::ValidTransaction;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
-use frame_system::{ensure_none, offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
+use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
 use sp_core::{crypto::KeyTypeId};
 use sp_runtime::{RuntimeDebug, offchain as rt_offchain, offchain::{http, storage::{MutateStorageError, StorageRetrievalError, StorageValueRef}}, transaction_validity::{
-		InvalidTransaction, TransactionSource, TransactionValidity
+		InvalidTransaction, TransactionValidity
 	}};
 use sp_std::vec::Vec;
 
@@ -89,18 +89,6 @@ pub mod crypto {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Payload<Public> {
-	number: u64,
-	public: Public,
-}
-
-impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
-	fn public(&self) -> T::Public {
-		self.public.clone()
-	}
-}
-
 type StrVecBytes = Vec<u8>;
 type IbanBalance = (StrVecBytes, u64);
 
@@ -157,20 +145,26 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T:Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn submit_balance(origin: OriginFor<T>, iban_balance: IbanBalance) -> DispatchResultWithPostInfo {
+		pub fn submit_balances(origin: OriginFor<T>, iban_balances: Vec<IbanBalance>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::add_balance(who, iban_balance);
+
+			for iban_balance in iban_balances.iter() {
+				Self::add_balance(who, iban_balance);
+			}
 			Ok(().into())
 		}
 
 		#[pallet::weight(0)]
-		pub fn submit_balance_unsigned(
+		pub fn submit_balances_unsigned(
 			origin: OriginFor<T>, 
 			_block_number: T::BlockNumber, 
-			iban_balance: Vec<IbanBalance>
+			iban_balances: Vec<IbanBalance>
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			Self::add_balance(Default::default(), iban_balance);
+			
+			for iban_balance in iban_balances.iter() {
+				Self::add_balance(Default::default(), iban_balance);
+			}
 
 			let current_block = <frame_system::Pallet<T>>::block_number();
 			<NextSyncAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -189,8 +183,8 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::submit_balance_unsigned(block_number, iban_balance) = call {
-				Self::validate_tx_parameters(&block_number, iban_balance)
+			if let Call::submit_balances_unsigned(block_number, iban_balances) = call {
+				Self::validate_tx_parameters(block_number, iban_balances)
 			} else {
 				InvalidTransaction::Call.into()
 			}
@@ -199,11 +193,23 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn prices)]
-	pub(super) type IbanBalances<T: Config> = StorageValue<_, Vec<IbanBalance>, ValueQuery>;
+	pub(super) type IbanBalances<T: Config> = StorageMap<_, Blake2_128Concat, StrVecBytes, u64, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn next_sync_at)]
 	pub(super) type NextSyncAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Payload<Public> {
+	number: u64,
+	public: Public,
+}
+
+impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
+	fn public(&self) -> T::Public {
+		self.public.clone()
+	}
 }
 
 enum TransactionType {
@@ -214,7 +220,6 @@ enum TransactionType {
 
 
 impl<T: Config> Pallet<T> {
-
 	// choose transaction type: signed or unsigned
 	// currently supports only unsigned
 	// TO-DO: add signed transaction support
@@ -274,17 +279,17 @@ impl<T: Config> Pallet<T> {
 		log::info!("fetching bank statements from API");
 
 		let json = Self::fetch_json(API_URL).unwrap();
-		let iban_balance = match Self::extract_iban_balances(json) {
-			Some((iban, balance)) => Ok((iban, balance)),
+		let iban_balances = match Self::extract_iban_balances(json) {
+			Some(iban_balances) => Ok(iban_balances),
 			None => {
 			 	log::error!("Unable to extract iban balance from response");
 				Err(http::Error::Unknown)
 			}
 		};
 
-		let call = Call::submit_balance_unsigned(
+		let call = Call::submit_balances_unsigned(
 			block_number,
-			iban_balance?
+			iban_balances?
 		);
 
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).map_err(|_| {
@@ -322,20 +327,25 @@ impl<T: Config> Pallet<T> {
 	fn extract_iban_balances(json: JsonValue) -> Option<Vec<IbanBalance>> {
 		let iban_balances = match json {
 			JsonValue::Array(arr) => {
-				let mut iban_balances: Vec<IbanBalance> = Vec::with_capacity(arr.capacity());
+				let mut balances: Vec<IbanBalance> = Vec::with_capacity(arr.capacity());
 				for val in arr.iter() {
-					iban_balances.push(Self::extract_iban_balance(val)?);
+					balances.push(Self::extract_iban_balance(*val)?);
 				}
-				iban_balances
+				balances
 			},
 			_ => return None,
 		};
 		Some(iban_balances)
 	}
 
+	fn add_balance(who: T::AccountId, iban_balance: &IbanBalance) {
+		log::info!("Adding new iban balance: {:?} {} ", iban_balance.0, iban_balance.1);
+		<IbanBalances<T>>::insert(&iban_balance.0, iban_balance.1);
+	}
+
 	fn validate_tx_parameters(
 		block_number: &T::BlockNumber, 
-		iban_balance: IbanBalance
+		iban_balances: &Vec<IbanBalance>
 	) -> TransactionValidity {
 		// check if we are on time
 		let next_sync_at = <NextSyncAt<T>>::get();
@@ -349,7 +359,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		ValidTransaction::with_tag_prefix("FiatRamps")
-			.priority(T::UnsignedPriority::get().saturating_add(iban_balance.1))
+			.priority(T::UnsignedPriority::get().saturating_add(iban_balances.capacity()))
 			.and_provides(next_sync_at)
 			.longevity(5)
 			.propagate(true)
