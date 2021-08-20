@@ -1,7 +1,7 @@
 use crate as fiat_ramps;
 use crate::*;
 use codec::Decode;
-use frame_support::{assert_ok, parameter_types, sp_tracing::warn};
+use frame_support::{parameter_types};
 use sp_core::{
     offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
     sr25519::Signature,
@@ -9,8 +9,7 @@ use sp_core::{
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 
-use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore,};
-use sp_runtime::{MultiAddress, RuntimeAppPublic, SaturatedConversion, generic, offchain::TransactionPool, testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}};
+use sp_runtime::{ testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -19,6 +18,7 @@ pub const MILLISECS_PER_BLOCK: u64 = 6000;
 // NOTE: Currently it is not possible to change the slot duration after the chain has started.
 //       Attempting to do so will brick block production.
 pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
+
 //Mock runtime for our tests
 frame_support::construct_runtime!(
 	pub enum Test where
