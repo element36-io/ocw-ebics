@@ -8,11 +8,13 @@ use frame_support::traits::Get;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
 use sp_core::{crypto::KeyTypeId};
-use sp_runtime::{RuntimeDebug, offchain as rt_offchain, offchain::{http, storage::{MutateStorageError, StorageRetrievalError, StorageValueRef}}, transaction_validity::{
+use sp_runtime::{RuntimeDebug, offchain as rt_offchain, offchain::{http, storage::{StorageValueRef}}, transaction_validity::{
 		InvalidTransaction, TransactionValidity
 	}};
 use sp_std::vec::Vec;
 
+#[cfg(test)]
+mod tests;
 /// Defines application identifier for crypto keys of this module.
 ///
 /// Every module that deals with signatures needs to declare its unique identifier for
@@ -37,7 +39,7 @@ pub struct Transaction {
 	instr_id: Vec<u8>
 }
 
-pub struct Statement {
+pub struct Iban {
 	iban: Vec<u8>,
 	balance_op: f64,
 	balance_op_currency: Vec<u8>,
