@@ -1,0 +1,29 @@
+name: Run Unit Tests
+
+on:
+  push:
+    branches:
+    - master
+    - milestone-1
+
+jobs:
+  build-node-template:
+    runs-on: ubuntu-latest
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Set-Up
+        run: sudo apt install -y cmake pkg-config libssl-dev git build-essential clang libclang-dev curl
+
+      - name: Install Rustup
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          source ~/.cargo/env
+          rustup default stable
+          rustup update nightly
+          rustup update stable
+          rustup target add wasm32-unknown-unknown --toolchain nightly
+
+      - name: Run tests
+        run: cargo test
