@@ -6,9 +6,9 @@ use codec::{Decode, Encode};
 use frame_support::pallet_prelude::ValidTransaction;
 use frame_support::traits::Get;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
-use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
+use frame_system::{Account, offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
 use sp_core::{crypto::KeyTypeId};
-use sp_runtime::{RuntimeDebug, offchain as rt_offchain, offchain::{http, storage::{StorageValueRef}}, transaction_validity::{
+use sp_runtime::{MultiSignature, RuntimeDebug, offchain as rt_offchain, offchain::{http, storage::{StorageValueRef}}, traits::{IdentifyAccount, Verify}, transaction_validity::{
 		InvalidTransaction, TransactionValidity
 	}};
 use sp_std::vec::Vec;
@@ -24,8 +24,95 @@ mod tests;
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
 
-// ebics endpoint for bank statements
+/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
+pub type Signature = MultiSignature;
+
+/// Some way of identifying an account on the chain. We intentionally make it equivalent
+/// to the public key of our transaction signing scheme.
+pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;// ebics endpoint for bank statements
+
+/// Hardcoded inital test api endpoint
 const API_URL: &[u8] = b"http://localhost:8093/ebics/api-v1/bankstatements";
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Transaction {
+	iban: StrVecBytes,
+	name: StrVecBytes,
+	addr_line: Vec<Vec<u8>>,
+	currency: Vec<u8>,
+	amount: u64,
+	reference: Vec<u8>,
+	pmt_inf_id: Vec<u8>,
+	msg_id: Vec<u8>,
+	instr_id: Vec<u8>
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct IbanAccount {
+	iban: StrVecBytes,
+	balance_op: u64,
+	balance_op_currency: Vec<u8>,
+	balance_cl: u64,
+	balance_cl_currency: Vec<u8>,
+	booking_date: Vec<u8>,
+	validation_date: Vec<u8>,
+	incoming_transactions: Vec<Transaction>,
+	outgoing_transactions: Vec<Transaction>
+}
+
+impl Transaction {
+	pub fn new(
+		iban: StrVecBytes,
+		name: Vec<u8>,
+		addr_line: Vec<StrVecBytes>,
+		currency: Vec<u8>,
+		amount: f64,
+		reference: Vec<u8>,
+		pmt_inf_id: Vec<u8>,
+		msg_id: Vec<u8>,
+		instr_id: Vec<u8>
+	) {
+		Self {
+			iban,
+			name,
+			addr_line,
+			currency,
+			amount,
+			reference,
+			pmt_inf_id,
+			msg_id,
+			instr_id,
+		}
+	}
+
+	// pub fn parse_from_utf8 ()
+}
+
+impl IbanAccount {
+	pub fn new(
+		iban: Vec<u8>,
+		balance_op: f64,
+		balance_op_currency: Vec<u8>,
+		balance_cl: f64,
+		balance_cl_currency: Vec<u8>,
+		booking_date: Vec<u8>,
+		validation_date: Vec<u8>,
+		incoming_transactions: Vec<Transaction>,
+		outgoing_transactions: Vec<Transaction>
+	) {
+		Self {
+			iban,
+			balance_op,
+			balance_op_currency,
+			balance_cl,
+			balance_cl_currency,
+			booking_date,
+			validation_date,
+			incoming_transactions,
+			outgoing_transactions,
+		}
+	}
+}
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrapper.
 /// We can utilize the supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -56,14 +143,13 @@ pub mod crypto {
 	}
 }
 
-type StrVecBytes = Vec<u8>;
 type IbanBalance = (StrVecBytes, u64);
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+	use frame_support::{StorageMap, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	use super::*;
 
@@ -135,6 +221,10 @@ pub mod pallet {
 			for iban_balance in iban_balances.iter() {
 				Self::add_balance(&who, iban_balance);
 			}
+
+			let current_block = <frame_system::Pallet<T>>::block_number();
+			<NextSyncAt<T>>::put(current_block + T::UnsignedInterval::get());
+
 			Ok(().into())
 		}
 
@@ -160,6 +250,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		NewBalanceEntry(IbanBalance),
+		NewAccount(AccountId),
 	}
 
 	#[pallet::validate_unsigned]
@@ -176,7 +267,7 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn prices)]
+	#[pallet::getter(fn iban_balances)]
 	pub(super) type IbanBalances<T: Config> = StorageMap<_, Blake2_128Concat, StrVecBytes, u64, ValueQuery>;
 
 	#[pallet::type_value]
@@ -192,6 +283,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn api_url)]
 	pub(super) type ApiUrl<T: Config> = StorageValue<_, StrVecBytes, ValueQuery, DefaultApi<T>>;
+
+	// mapping between internal AccountId to Iban number
+	#[pallet::storage]
+	#[pallet::getter(fn iban-account)]
+	pub(super) type Balances<T: Config> = StorageMap<_, Blake2_128Concat, AccountId, StrVecBytes, ValueQuery>;
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -275,6 +371,14 @@ impl<T: Config> Pallet<T> {
 		Ok(json_val)
 	}
 
+	// fetches IBAN balacnes and submits signed transaction
+	fn fetch_iban_balances<'a> (
+		block_number: &T::BlockNumber,
+	) -> Result<(), &'static str> {
+		log::info("fetching statements");
+
+		
+	}
 	// fetches IBAN balance and submits unsigend transaction to the runtime
 	fn fetch_iban_balance_and_send_unsigned<'a>(
 		block_number: T::BlockNumber,

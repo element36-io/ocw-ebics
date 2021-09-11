@@ -2,26 +2,29 @@
 use codec::{Decode, Encode};
 
 use sp_std::vec::Vec;
+pub type StrVecBytes = Vec<u8>;
+type IbanBalance = (StrVecBytes, u64);
 
 mod fiat_ramps_type {
     #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
     pub struct Transaction {
-        iban: Vec<u8>,
-        name: Vec<u8>,
+        iban: StrVecBytes,
+        name: StrVecBytes,
         addr_line: Vec<Vec<u8>>,
         currency: Vec<u8>,
-        amount: f64,
+        amount: u64,
         reference: Vec<u8>,
         pmt_inf_id: Vec<u8>,
         msg_id: Vec<u8>,
         instr_id: Vec<u8>
     }
+
     #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-    pub struct Iban {
-        iban: Vec<u8>,
-        balance_op: f64,
+    pub struct IbanAccount {
+        iban: StrVecBytes,
+        balance_op: u64,
         balance_op_currency: Vec<u8>,
-        balance_cl: f64,
+        balance_cl: u64,
         balance_cl_currency: Vec<u8>,
         booking_date: Vec<u8>,
         validation_date: Vec<u8>,
@@ -57,7 +60,7 @@ mod fiat_ramps_type {
         pub fn parse_from_utf8()
     }
 
-    impl Iban {
+    impl IbanAccount {
         pub fn new(
             iban: Vec<u8>,
             balance_op: f64,
