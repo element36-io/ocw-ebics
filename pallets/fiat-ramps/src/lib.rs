@@ -2,6 +2,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use std::borrow::Borrow;
+use std::net::Incoming;
+
 use codec::{Decode, Encode};
 use frame_support::{ensure, pallet_prelude::ValidTransaction};
 use frame_support::traits::Get;
@@ -10,6 +13,7 @@ use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload,
 use sp_core::Pair;
 use sp_core::{crypto::KeyTypeId, Public};
 use sp_runtime::app_crypto::Ss58Codec;
+use sp_runtime::offchain::http::Response;
 use sp_runtime::{MultiSignature, RuntimeDebug, offchain as rt_offchain, traits::{IdentifyAccount, Verify, StaticLookup}, transaction_validity::{
 		InvalidTransaction, TransactionValidity
 	}};
@@ -109,7 +113,8 @@ pub mod pallet {
 			if !should_sync {
 				return ;
 			}
-			let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
+			let res = Self::fetch_transactions_and_send_signed(&block_number);
+			// let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
 
 			if let Err(e) = res {
 				log::error!("Error: {}", e);
@@ -139,18 +144,22 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn mint(
 			origin: OriginFor<T>,
-			iban: StrVecBytes,
+			iban: IbanAccount,
 			incoming_transactions: Vec<Transaction>
 		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
+			let _who = ensure_signed(origin)?;
 			for incoming_transaction in incoming_transactions.iter() {
-				Self::process_minting(iban, incoming_transaction);
+				Self::process_minting(&iban, incoming_transaction);
 			}
 			Ok(().into())
 		}
 
 		#[pallet::weight(0)]
-		pub fn submit_balances(origin: OriginFor<T>, iban_balances: Vec<IbanBalance>) -> DispatchResultWithPostInfo {
+		pub fn submit_balances(
+			origin: OriginFor<T>,
+			block_number: T::BlockNumber,
+			iban_balances: Vec<IbanBalance>
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			for iban_balance in iban_balances.iter() {
@@ -249,52 +258,119 @@ impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
 	}
 }
 
-
-enum TransactionType {
-	Signed,
-	Raw,
-	None,
-}
-
 /// Utility function for parsing value from json object
 ///
 /// parse value of a given key from json object
-fn parse_value(key: &str, obj: &Vec<(Vec<char>, JsonValue)>) -> &JsonValue {
+fn parse_value(key: &str, obj: &Vec<(Vec<char>, JsonValue)>) -> JsonValue {
 	let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq(key.chars())).unwrap();
-	v
+	v.clone()
+}
+
+pub enum TransactionType {
+	Incoming,
+	Outgoing,
+	None
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct Transaction {
 	iban: StrVecBytes,
 	name: StrVecBytes,
-	addr_line: Vec<Vec<u8>>,
-	currency: Vec<u8>,
+	addr_line: Vec<StrVecBytes>,
+	currency: StrVecBytes,
 	amount: u64,
-	reference: Vec<u8>,
-	pmt_inf_id: Vec<u8>,
-	msg_id: Vec<u8>,
-	instr_id: Vec<u8>
+	reference: StrVecBytes,
+	pmt_inf_id: StrVecBytes,
+	msg_id: StrVecBytes,
+	instr_id: StrVecBytes
 }
 
 impl Transaction {
+	// Get single transaction instance from json
 	pub fn from_json_statement(json: &JsonValue) -> Option<Self> {
-
-	}
-	pub fn parse_incoming_transactions(json: &JsonValue) -> Option<Vec<Self>> {
-		let incoming_transactions = match json {
+		let transaction = match json {
 			JsonValue::Object(obj) => {
-				let transactions = match parse_value("incomingTransactions", obj) {
-					JsonValue::Array(transactions) => {
-						transactions.iter().map(|json| Self::from_json_statement(json)).collect::<Vec<Transaction>>()
-					}
+				let iban = match parse_value("iban", obj) {
+					JsonValue::String(str) => str.iter().map(|c| *c as u8).collect::<Vec<_>>(),
 					_ => return None,
+				};
+				let name = match parse_value("name", obj) {
+					JsonValue::String(cur) => cur.iter().map(|c| *c as u8).collect::<Vec<_>>(),
+					_ => return None,
+				};
+				let currency = match parse_value("currency", obj) {
+					JsonValue::String(cur) => cur.iter().map(|c| *c as u8).collect::<Vec<_>>(),
+					_ => return None,
+				};
+				let amount = match parse_value("amount", obj) {
+					JsonValue::Number(num) => {
+						let exp = num.fraction_length.checked_sub(2).unwrap_or(0);
+						let balance = num.integer as u64 * 100 + (num.fraction / 10_u64.pow(exp)) as u64;
+						balance
+					},
+					_ => return None,
+				};
+				let reference = match parse_value("reference", obj) {
+					JsonValue::String(cur) => cur.iter().map(|c| *c as u8).collect::<Vec<_>>(),
+					_ => return None,
+				};
+				// let balance_cl_date = match parse_value("endToEndId", obj) {
+				// 	JsonValue::String(date) => date.iter().map(|c| *c as u8).collect::<Vec<_>>(),
+				// 	_ => return None,
+				// };
+				// let booking_date = match parse_value("instrId", obj) {
+				// 	JsonValue::String(date) => date.iter().map(|c| *c as u8).collect::<Vec<_>>(),
+				// 	_ => return None,
+				// };
+				// let validation_date = match parse_value("msgId", obj) {
+				// 	JsonValue::String(date) => date.iter().map(|c| *c as u8).collect::<Vec<_>>(),
+				// 	_ => return None,
+				// };
+				
+				Self {
+					iban,
+					name,
+					currency,
+					amount,
+					reference,
+					..Default::default()
+				}
+			},
+			_ => return None,
+		};
+		Some(transaction)
+	}
+	
+	// Parse transactions from json based on Type
+	pub fn parse_transactions(json: &JsonValue, transaction_type: TransactionType) -> Option<Vec<Self>> {
+		let parsed_transactions = match json {
+			JsonValue::Object(obj) => {
+				let transactions = match transaction_type {
+					TransactionType::Incoming => {
+						let incoming_transactions = match parse_value("incomingTransactions", obj) {
+							JsonValue::Array(txs) => {
+								txs.iter().map(|json| Self::from_json_statement(json).unwrap()).collect::<Vec<Transaction>>()
+							}
+							_ => return None,
+						};
+						incoming_transactions
+					},
+					TransactionType::Outgoing => {
+						let outgoing_transactions = match parse_value("outgoingTransactions", obj) {
+							JsonValue::Array(txs) => {
+								txs.iter().map(|json| Self::from_json_statement(json).unwrap()).collect::<Vec<Transaction>>()
+							}
+							_ => return None,
+						};
+						outgoing_transactions
+					},
+					_ => Default::default()
 				};
 				transactions
 			},
 			_ => return None
 		};
-		Some(incoming_transactions)
+		Some(parsed_transactions)
 	}
 }
 
@@ -302,11 +378,11 @@ impl Transaction {
 pub struct IbanAccount {
 	iban: StrVecBytes,
 	balance_op: u64,
-	balance_op_currency: Vec<u8>,
+	balance_op_currency: StrVecBytes,
 	balance_cl: u64,
-	balance_cl_currency: Vec<u8>,
-	booking_date: Vec<u8>,
-	validation_date: Vec<u8>
+	balance_cl_currency: StrVecBytes,
+	booking_date: StrVecBytes,
+	validation_date: StrVecBytes
 	// incoming_transactions: Vec<Transaction>,
 	// outgoing_transactions: Vec<Transaction>
 }
@@ -388,16 +464,66 @@ impl<T: Config> Pallet<T> {
 		IbanToAccount::<T>::contains_key(iban)
 	}
 
-	// process minting 
-	fn process_minting(iban: StrVecBytes, incoming_transaction: &Transaction) {
-		// if transaction is coming from 
-		if (Self::iban_exists(iban)) {
-			let connected_account_id: T::AccountId = IbanToAccount::<T>::get(iban).into();
-			
-			Balances::<T>::insert(connected_account_id, )
-		}
+	// process transactio and make changes in the iban accounts
+	fn process_transaction(
+		iban_account: IbanAccount, 
+		transaction: &Transaction, 
+		transaction_type: &TransactionType
+	) -> IbanAccount {
+		let new_iban_account = match transaction_type {
+			TransactionType::Incoming => {
+				let new_op_balance = iban_account.balance_cl;
+				let new_cl_balance = iban_account.balance_cl + transaction.amount;
+				IbanAccount {
+					balance_op: new_op_balance,
+					balance_cl: new_cl_balance,
+					..iban_account
+				}
+			},
+			_ => return iban_account
+		};
+		new_iban_account
 	}
 
+	// process minting 
+	fn process_minting(iban: &IbanAccount, incoming_transaction: &Transaction) {
+		// if transaction is coming from 
+		let possible_account = sp_std::str::from_utf8(&incoming_transaction.reference[..]).unwrap();
+
+		if Self::iban_exists(iban.iban.clone()) {
+			let connected_account_id: T::AccountId = IbanToAccount::<T>::get(iban.iban.clone()).into();
+			let old_iban_account = Balances::<T>::get(connected_account_id.borrow());
+			let new_iban_account = Self::process_transaction(
+				old_iban_account, 
+				incoming_transaction, 
+				&TransactionType::Incoming
+			);
+			Balances::<T>::insert(connected_account_id, new_iban_account);
+		}
+		// match T::AccountId::from_ss58check(possible_account) {
+		// 	Ok(account) => {
+		// 		let old_iban_account = Balances::<T>::get(account);
+		// 		let new_iban_account = Self::process_transaction(
+		// 			&old_iban_account, 
+		// 			incoming_transaction, 
+		// 			&TransactionType::Incoming
+		// 		);
+		// 		Balances::<T>::insert(account.into(), new_iban_account);
+		// 	},
+		// 	Err(_err) => {
+		// 		if Self::iban_exists(iban.iban) {
+		// 			let connected_account_id: T::AccountId = IbanToAccount::<T>::get(iban.iban).into();
+		// 			let old_iban_account = Balances::<T>::get(connected_account_id);
+		// 			let new_iban_account = Self::process_transaction(
+		// 				&old_iban_account, 
+		// 				incoming_transaction, 
+		// 				&TransactionType::Incoming
+		// 			);
+		// 			Balances::<T>::insert(connected_account_id, new_iban_account);
+		// 		}
+		// 	}
+		// };
+	}
 
 	// fetch json from the Ebics Service API using lite-json
 	fn fetch_json<'a>(remote_url: &'a [u8]) -> Result<JsonValue, &str> {
@@ -427,37 +553,62 @@ impl<T: Config> Pallet<T> {
 		Ok(json_val)
 	}
 
-	// fetches IBAN balacnes and submits signed transaction
-	fn fetch_iban_balances<'a> (
-		block_number: &T::BlockNumber,
+	fn fetch_transactions_and_send_signed(
+		block_number: &T::BlockNumber
 	) -> Result<(), &'static str> {
 		log::info!("fetching statements");
 
-		let next_sync_at = <NextSyncAt<T>>::get();
+		let next_sync_at = NextSyncAt::<T>::get();
 
 		if &next_sync_at > block_number {
 			return Err("Too early to send signed transaction")
 		}
 
-		let remote_url = <ApiUrl<T>>::get();
+		let statements= Self::parse_statements();
 
-		let json = Self::fetch_json(&remote_url[..]).unwrap();
-		let iban_balances = match Self::extract_iban_balances(json) {
-			Some(iban_balances) => Ok(iban_balances),
-			None => {
-			 	log::error!("Unable to extract iban balance from response");
-				Err("Unable to extract iban balances from response")
-			}
-		}?;
-
-		let call = Call::submit_balances(
-			block_number,
-			iban_balances
-		);
-
-		SubmitTransaction::<T, Call<T>>::submit_balances(call.into())
-			.map_err(|()| "Error sending signed transaction")
+		for (iban_account, incoming_transactions) in statements {
+			let call = Call::mint(
+				iban_account,
+				incoming_transactions,
+			);
+			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+				.map_err(|()| "Unable to submit tx")?;
+		}
+		Ok(())
 	}
+
+	/// parse bank statement
+	///
+	/// returns:
+	/// 	- iban_account: IbanAccount
+	///		- incoming_txs: Vec<Transacion>
+	///		- outgoing_txs: Vec<Transaction>
+	fn parse_statements() -> Vec<(IbanAccount, Vec<Transaction>)> {
+		// fetch json value
+		let remote_url = ApiUrl::<T>::get();
+		let json = Self::fetch_json(&remote_url[..]).unwrap();
+
+		let statements = match json {
+			JsonValue::Array(arr) => {
+				let mut balances: Vec<(IbanAccount, Vec<Transaction>)> = Vec::with_capacity(arr.capacity());
+				for val in arr.iter() {
+					// extract iban account
+					let iban_account = IbanAccount::from_json_value(&val).unwrap();
+
+					// extract transactions
+					// currently only incoming
+					// let outgoing_transactions = Transaction::parse_transactions(&json, TransactionType::Outgoing);
+					let incoming_transactions = Transaction::parse_transactions(&val, TransactionType::Incoming).unwrap();
+
+					balances.push((iban_account, incoming_transactions));
+				}
+				balances
+			},
+			_ => return vec![],
+		};
+		statements
+	}
+
 	// fetches IBAN balance and submits unsigend transaction to the runtime
 	fn fetch_iban_balance_and_send_unsigned<'a>(
 		block_number: T::BlockNumber,
