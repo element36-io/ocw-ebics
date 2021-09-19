@@ -3,12 +3,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use core::borrow::Borrow;
-use core::convert::TryInto;
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::ValidTransaction};
 use frame_support::traits::Get;
+use frame_system::offchain::SendSignedTransaction;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
-use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction}};
+use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, SubmitTransaction, Signer}};
 use sp_core::{crypto::KeyTypeId};
 use sp_runtime::AccountId32;
 use sp_runtime::{MultiSignature, RuntimeDebug, offchain as rt_offchain, transaction_validity::{
@@ -25,7 +25,7 @@ mod tests;
 /// When an offchain worker is signing transactions it's going to request keys from type
 /// `KeyTypeId` via the keystore to sign the transaction.
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
-pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"demo");
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ramp");
 
 /// Hardcoded inital test api endpoint
 const API_URL: &[u8] = b"https://61439649c5b553001717d029.mockapi.io/statements";
@@ -41,9 +41,9 @@ pub mod crypto {
 
 	app_crypto!(sr25519, KEY_TYPE);
 
-	pub struct TestAuthId;
+	pub struct OcwAuthId;
 	// implemented for ocw-runtime
-	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
+	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for OcwAuthId {
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
 		type GenericPublic = sp_core::sr25519::Public;
@@ -51,7 +51,7 @@ pub mod crypto {
 
 	// implemented for mock runtime in test
 	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
-		for TestAuthId
+		for OcwAuthId
 	{
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
@@ -108,6 +108,7 @@ pub mod pallet {
 			let should_sync = Self::should_sync(&block_number);
 
 			if !should_sync {
+				log::info!("Too early to sync");
 				return ;
 			}
 			let res = Self::fetch_transactions_and_send_signed(&block_number);
@@ -116,6 +117,7 @@ pub mod pallet {
 			if let Err(e) = res {
 				log::error!("Error: {}", e);
 			}
+			Self::set_new_sync_block(&block_number);
 		}
 	}
 
@@ -153,8 +155,6 @@ pub mod pallet {
 				Self::process_minting(&iban_account, &incoming_transactions);
 			}
 
-			let current_block = <frame_system::Pallet<T>>::block_number();
-			<NextSyncAt<T>>::put(current_block + T::UnsignedInterval::get());
 			Ok(().into())
 		}
 	}
@@ -254,16 +254,7 @@ pub struct Transaction {
 	instr_id: StrVecBytes
 }
 
-impl Transaction {	
-	// get reference as AccountId32
-	fn get_reference(&self) -> AccountId32 {
-		let account_u8: [u8; 32] =  self.reference.clone()
-			.try_into()
-			.unwrap_or_else(|v: Vec<u8>| panic!("Expected a Vec of length {} but it was {}", 32, v.len()));
-		let account = sp_core::crypto::AccountId32::from(account_u8);
-		account
-	}
-
+impl Transaction {
 	// Get single transaction instance from json
 	pub fn from_json_statement(json: &JsonValue) -> Option<Self> {
 		let transaction = match json {
@@ -420,10 +411,15 @@ impl IbanAccount {
 }
 
 impl<T: Config> Pallet<T> {
+	// Sets new sync block number
+	fn set_new_sync_block(block_number: &T::BlockNumber) {
+		<NextSyncAt<T>>::put(*block_number + T::UnsignedInterval::get());
+	}
+
 	// checks whether we should sync in this block number
 	fn should_sync(block_number: &T::BlockNumber) -> bool {
 		let next_sync_at = <NextSyncAt<T>>::get();
-		if &next_sync_at == block_number {
+		if &next_sync_at <= block_number {
 			return true
 		}
 		false
@@ -518,17 +514,28 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), &'static str> {
 		log::info!("fetching statements");
 
-		let next_sync_at = NextSyncAt::<T>::get();
+		// compose extrinsic
+		// let call = Call::mint(statements);
 
-		if &next_sync_at > block_number {
-			return Err("Too early to send signed transaction")
+		// get extrinsic signer
+		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		
+		if !signer.can_sign() {
+			return Err("No local accounts available!")
+		}
+		
+		let results = signer.send_signed_transaction(|_account| {
+			// Execute call to mint
+			let statements= Self::parse_statements();
+			Call::mint(statements)
+		});
+		for (acc, res) in & results {
+			match res {
+				Ok(()) => log::info!("[{:?}] Submitted minting", acc.id),
+				Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+			}
 		}
 
-		let statements= Self::parse_statements();
-
-		let call = Call::mint(statements);
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-			.map_err(|()| "Unable to submit tx")?;
 		Ok(())
 	}
 

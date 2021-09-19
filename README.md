@@ -80,6 +80,18 @@ Now you will be able to open the block explorer and see transactions, events tha
 
 For example, you can take a look at chain storage of `fiat-ramps` [here](https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/chainstate)
 
+### Inject Signer Account
+
+For the offchain worker to sign transactions, we need to insert authority keys into the chain. This can be done using RPC call `author_insert_key` which is located in PolkadotJs Apps interface RPC calls section.
+
+For testing puroposes, we can use this account:
+
+```js
+key_type: ramp
+suri: cup swing hill dinner pioneer mom stick steel sad raven oak practice
+public_key:
+```
+
 ### New API url
 
 You can set the new url for the `ebics-service` via PolkadotJS interface. Follow this link to the `Sudo` [tab](https://polkadot.js.org/apps/#/sudo) and choose `FiatRamps.setApiUrl` extrinsic. Paste the new url for the API and click `Submit transaction`. If everything is good, i.e you are the Sudo account and you have the necessary rights, you should see the transaction included in the block and offchain worker starts querying the new API.
