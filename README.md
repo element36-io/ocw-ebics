@@ -89,7 +89,7 @@ For testing puroposes, we can use this account:
 ```js
 key_type: ramp
 suri: cup swing hill dinner pioneer mom stick steel sad raven oak practice
-public_key:
+public_key: 5C555czPfaHgYhKhsRg2KNCLGCJ82jVsvweTHAnfvT83uy5T
 ```
 
 ### New API url

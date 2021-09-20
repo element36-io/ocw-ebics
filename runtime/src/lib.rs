@@ -325,7 +325,7 @@ where
 
 		let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
 
-		let address = MultiAddress::Address32(account.into());
+		let address = MultiAddress::Id(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature, extra)))
 	}
