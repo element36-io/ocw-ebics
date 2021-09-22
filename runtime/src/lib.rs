@@ -7,7 +7,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use codec::Encode;
-use frame_support::log::warn;
+use frame_support::{log::warn, traits::Currency};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 }; 
@@ -38,8 +38,7 @@ pub use frame_support::{
 	},
 	StorageValue
 };
-pub use pallet_balances::Call as BalancesCall;
-pub use pallet_timestamp::Call as TimestampCall;
+
 use pallet_transaction_payment::CurrencyAdapter;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -236,7 +235,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
+	pub const ExistentialDeposit: u128 = 10;
 	pub const MaxLocks: u32 = 50;
 }
 
@@ -275,8 +274,9 @@ impl pallet_sudo::Config for Runtime {
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 
 parameter_types! {
-	// interval in blocks between two consecutive unsigned transactions
-	pub const UnsignedInterval: BlockNumber = 3;
+	// interval in milliseconds between two offchain worker instances
+	// we set it at 5 block times
+	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
 	pub const UnsignedPriority: TransactionPriority = 1000;
 }
 
@@ -284,7 +284,9 @@ impl fiat_ramps::Config for Runtime {
 	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type Event = Event;
 	type Call = Call;
-	type UnsignedInterval = UnsignedInterval;
+	type Currency = pallet_balances::Pallet<Runtime>;
+	type TimeProvider = pallet_timestamp::Pallet<Runtime>;
+	type MinimumInterval = MinimumInterval;
 	type UnsignedPriority = UnsignedPriority;
 }
 

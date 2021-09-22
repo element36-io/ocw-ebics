@@ -2,22 +2,16 @@
     "StrVecBytes": "Vec<u8>",
     "IbanBalance": "(Vec<u8>, u64)",
     "IbanAccount": {
-        "iban": "Stringn",
-        "balance_op": "u64",
-        "balance_op_currency": "String",
-        "balance_cl": "u64",
-        "balance_cl_currency": "String",
-        "booking_date": "String"
+      "iban": "Vec<u8>",
+      "balance": "Balance",
+      "last_updated": "u64"
     },
     "Transaction": {
-        "iban": "String",
-        "name": "String",
-        "addr_line": "Vec<String>",
-        "currency": "String",
-        "amount": "u64",
-        "reference": "String",
-        "pmt_inf_id": "String",
-        "msg_id": "String",
-        "instr_id": "String"
+      "iban": "Vec<u8>",
+      "name": "Vec<u8>",
+      "currency": "Vec<u8>",
+      "amount": "Balance",
+      "reference": "Vec<u8>",
+      "tx_type": "u8"
     }
-}
+  }
