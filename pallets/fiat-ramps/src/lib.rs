@@ -11,6 +11,7 @@ use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload,
 use sp_core::{crypto::{KeyTypeId}};
 
 use sp_runtime::AccountId32;
+use sp_runtime::offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef};
 use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
 		InvalidTransaction, TransactionValidity
 	}};
@@ -111,11 +112,13 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
-			let should_sync = Self::should_sync(<LastSyncAt<T>>::get());
+			let should_sync = Self::should_sync();
+
 			log::info!("should sync: {}", &should_sync);
+			
 			if !should_sync {
 				log::info!("Too early to sync");
-				return ()
+				return ();
 			}
 			let res = Self::fetch_transactions_and_send_signed();
 			// let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
@@ -410,22 +413,41 @@ impl IbanAccount {
 
 impl<T: Config> Pallet<T> {
 	// checks whether we should sync in the current timestamp
-	fn should_sync(last_sync: u128) -> bool {
-		// in genesis, we should sync
-		if last_sync == 0 {
-			return true;
-		}
- 		
+	fn should_sync() -> bool {
+		/// A friendlier name for the error that is going to be returned in case we are in the grace
+		/// period.
+		const RECENTLY_SENT: () = ();
+
 		let now = T::TimeProvider::now();
 		let minimum_interval = T::MinimumInterval::get();
 
-		log::info!("last sync: {} now: {} interval: {}", last_sync, now.as_millis(), minimum_interval);
 
-		// if minimum time interval has passed, we should sync
-		if now.as_millis() - last_sync >= minimum_interval.into() {
-			return true;
+		// Start off by creating a reference to Local Storage value.
+		// Since the local storage is common for all offchain workers, it's a good practice
+		// to prepend your entry with the module name.
+		let val = StorageValueRef::persistent(b"fiat_ramps::last_sync");
+		// The Local Storage is persisted and shared between runs of the offchain workers,
+		// and offchain workers may run concurrently. We can use the `mutate` function, to
+		// write a storage entry in an atomic fashion. Under the hood it uses `compare_and_set`
+		// low-level method of local storage API, which means that only one worker
+		// will be able to "acquire a lock" and send a transaction if multiple workers
+		// happen to be executed concurrently.
+		let res = val.mutate(|last_sync: Result<Option<u128>, StorageRetrievalError>| {
+			match last_sync {
+				// If we already have a value in storage and the block number is recent enough
+				// we avoid sending another transaction at this time.
+				Ok(Some(last_sync_at)) if now.as_millis() < last_sync_at + minimum_interval as u128 =>
+					Err(RECENTLY_SENT),
+				// In every other case we attempt to acquire the lock and send a transaction.
+				_ => Ok(now.as_millis()),
+			}
+		});
+
+		match res {
+			Ok(now) => true,
+			Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => false,
+			Err(MutateStorageError::ConcurrentModification(_)) => false
 		}
-		false
 	}
 
 	// check if iban exists in the storage
