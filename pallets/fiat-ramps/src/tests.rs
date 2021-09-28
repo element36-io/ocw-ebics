@@ -89,10 +89,9 @@ impl pallet_timestamp::Config for Test {
 }
 
 impl fiat_ramps::Config for Test {
-	type AuthorityId = fiat_ramps::crypto::TestAuthId;
+	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type Event = Event;
 	type Call = Call;
-	type UnsignedInterval = UnsignedInterval;
 	type UnsignedPriority = UnsignedPriority;
 }
 
