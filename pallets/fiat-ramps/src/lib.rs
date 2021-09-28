@@ -9,7 +9,6 @@ use frame_system::offchain::SendSignedTransaction;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, Signer}};
 use sp_core::{crypto::{KeyTypeId}};
-
 use sp_runtime::AccountId32;
 use sp_runtime::offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef};
 use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
@@ -98,6 +97,10 @@ pub mod pallet {
 		/// multiple pallets send unsigned transactions.
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
+
+		/// Decimals of the internal token
+		#[pallet::constant]
+		type Decimals: Get<u8>;
 	}
 
 	#[pallet::pallet]
@@ -497,7 +500,7 @@ impl<T: Config> Pallet<T> {
 			let possible_account_id = AccountId32::from_ss58check(encoded);
 
 			// proces transaction based on the value of reference
-			// if decoding returns error, we look for the iban of 
+			// if decoding returns error, we look for the iban
 			match possible_account_id {
 				Ok(account_id) => {
 					let encoded = account_id.encode();
@@ -517,15 +520,21 @@ impl<T: Config> Pallet<T> {
 							transaction
 						);
 					}
-					// else {
-					// 	let account_id = <T::Public as IdentifyAccount>::generate();
-					// 	let old_iban_account = Balances::<T>::get(account_id.clone());
-					// 	let new_iban_account = Self::process_transaction(
-					// 		old_iban_account, 
-					// 		transaction,
-					// 	);
-					// 	Balances::<T>::insert(account_id, new_iban_account);
-					// }
+					else {
+						let (pair, _, _) = <crypto::Pair as sp_core::Pair>::generate_with_phrase(None);
+						let encoded = sp_core::Pair::public(&pair).encode();
+						let account_id = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
+						
+						log::info!("create new account: {:?}", &account_id);
+
+						Self::process_transaction(
+							&account_id, 
+							transaction,
+						);
+						Self::deposit_event(Event::NewAccount(account_id.clone()));
+
+						<IbanToAccount<T>>::insert(iban.iban.clone(), account_id);
+					}
 				}
 			}			
 		}

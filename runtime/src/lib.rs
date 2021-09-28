@@ -278,6 +278,7 @@ parameter_types! {
 	// we set it at 5 block times
 	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
 	pub const UnsignedPriority: TransactionPriority = 1000;
+	pub const Decimals: u8 = 10;
 }
 
 impl fiat_ramps::Config for Runtime {
@@ -288,6 +289,7 @@ impl fiat_ramps::Config for Runtime {
 	type TimeProvider = pallet_timestamp::Pallet<Runtime>;
 	type MinimumInterval = MinimumInterval;
 	type UnsignedPriority = UnsignedPriority;
+	type Decimals = Decimals;
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
