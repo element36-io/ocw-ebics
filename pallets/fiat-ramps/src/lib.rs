@@ -2,7 +2,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
-use frame_support::traits::fungible;
+use frame_support::traits::{ExistenceRequirement, WithdrawReasons, fungible};
 use frame_support::{pallet_prelude::ValidTransaction};
 use frame_support::traits::{Get, UnixTime, Currency, LockableCurrency, tokens::{ fungible::{ Mutate } }};
 use frame_system::offchain::SendSignedTransaction;
@@ -189,7 +189,7 @@ pub mod pallet {
 				log::info!("Incoming tx: {:?}", transactions.clone());
 				
 				#[cfg(feature = "std")]
-				Self::process_minting(&iban_account, &transactions);
+				Self::process_transactions(&iban_account, &transactions);
 			}
 
 			Ok(().into())
@@ -201,6 +201,12 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		NewBalanceEntry(IbanBalance),
 		NewAccount(T::AccountId),
+		Mint(T::AccountId, StrVecBytes, <<T as pallet::Config>::Currency as fungible::Inspect<T::AccountId>>::Balance),
+		Burn(T::AccountId, StrVecBytes, <<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance),
+		Transfer(
+			T::AccountId, StrVecBytes, 
+			T::AccountId, StrVecBytes, 
+			<<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance)
 	}
 
 	#[pallet::validate_unsigned]
@@ -458,7 +464,7 @@ impl<T: Config> Pallet<T> {
 		IbanToAccount::<T>::contains_key(iban)
 	}
 
-	// process transactio and make changes in the iban accounts
+	// process transaction and make changes in the iban accounts
 	fn process_transaction(
 		account_id: &T::AccountId, 
 		transaction: &Transaction, 
@@ -466,33 +472,73 @@ impl<T: Config> Pallet<T> {
 		match transaction.tx_type {
 			TransactionType::Incoming => {
 				let balance = <<T as pallet::Config>::Currency as fungible::Inspect<T::AccountId>>::Balance::try_from(transaction.amount);
-				
 				let unwrapped_balance = balance.unwrap_or_default();
 
 				log::info!("minting {:?} to {:?}", &unwrapped_balance, &account_id);
+				
 				let res = T::Currency::mint_into(
 					&account_id, 
-					unwrapped_balance
+					unwrapped_balance.clone()
 				);
 				match res {
-					Ok(()) => log::info!("minted"),
+					Ok(()) => Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
 					Err(e) => log::info!("Encountered err: {:?}", e),
 				};
 			},
-			// TransactionType::Outgoing => {
-			// 	let imbalance = T::Currency::deposit_creating(
-			// 		&transaction.reference, 
-			// 		transaction.amount.try_into().unwrap_or_default()
-			// 	);
-			// 	imbalance.peek()
-			// },
+			TransactionType::Outgoing => {
+				let balance = <<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance::try_from(transaction.amount);
+				let unwrapped_balance = balance.unwrap_or_default();
+
+				if Self::iban_exists(transaction.reference.clone()) {
+					log::info!("transfering: {:?} to {:?}", &unwrapped_balance, &account_id);
+					let dest: T::AccountId = IbanToAccount::<T>::get(transaction.reference.clone()).into();
+
+					// perform transfer
+					let res = T::Currency::transfer(
+						account_id, 
+						&dest, 
+						unwrapped_balance.clone(),
+						ExistenceRequirement::KeepAlive
+					);
+					
+					match res {
+						Ok(()) => {
+							Self::deposit_event(
+								Event::Transfer(
+									account_id.clone(), 
+									transaction.iban.clone(),
+									dest, 
+									transaction.reference.clone(), 
+									unwrapped_balance
+								)
+							)
+						},
+						Err(e) => log::info!("Encountered err: {:?}", e),
+					}
+				} else {
+					log::info!("burning: {:?} to {:?}", &unwrapped_balance, &account_id);
+
+					let res = T::Currency::burn(unwrapped_balance);
+					
+					let settle_res = T::Currency::settle(
+						account_id,
+						res,
+						WithdrawReasons::TRANSFER,
+						ExistenceRequirement::KeepAlive
+					);
+					match settle_res {
+						Ok(val) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
+						Err(e) => log::info!("Encountered err burning"),
+					}
+				}
+			},
 			_ => log::info!("Transaction type not supported yet!")
 		};
 	}
 
 	// process minting 
 	#[cfg(feature = "std")]
-	fn process_minting(iban: &IbanAccount, transactions: &Vec<Transaction>) {
+	fn process_transactions(iban: &IbanAccount, transactions: &Vec<Transaction>) {
 		for transaction in transactions {
 			// decode account id from reference
 			let encoded = core::str::from_utf8(&transaction.reference).unwrap_or("default");
@@ -500,7 +546,7 @@ impl<T: Config> Pallet<T> {
 			let possible_account_id = AccountId32::from_ss58check(encoded);
 
 			// proces transaction based on the value of reference
-			// if decoding returns error, we look for the iban
+			// if decoding returns error, we look for the iban in the pallet storage
 			match possible_account_id {
 				Ok(account_id) => {
 					let encoded = account_id.encode();
@@ -520,6 +566,7 @@ impl<T: Config> Pallet<T> {
 							transaction
 						);
 					}
+					// if no iban mapping exists in the storage, create new AccountId for Iban
 					else {
 						let (pair, _, _) = <crypto::Pair as sp_core::Pair>::generate_with_phrase(None);
 						let encoded = sp_core::Pair::public(&pair).encode();
@@ -617,10 +664,12 @@ impl<T: Config> Pallet<T> {
 
 					// extract transactions
 					// currently only incoming
-					// let outgoing_transactions = Transaction::parse_transactions(&json, TransactionType::Outgoing);
-					let incoming_transactions = Transaction::parse_transactions(&val, TransactionType::Incoming).unwrap();
-
-					balances.push((iban_account, incoming_transactions));
+					let mut transactions = Transaction::parse_transactions(&val, TransactionType::Outgoing).unwrap();
+					let mut incoming_transactions = Transaction::parse_transactions(&val, TransactionType::Incoming).unwrap();
+					
+					transactions.append(&mut incoming_transactions);
+					
+					balances.push((iban_account, transactions));
 				}
 				balances
 			},
