@@ -17,7 +17,7 @@ sp-io = { version = "3.0.0", default-features = false, git = 'https://github.com
 sp-runtime = { version = "3.0.0", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 sp-std = { version = "3.0.0", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 pallet-aura = { version = "3.0.0", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
-lite-json = { version = "0.1", default-features = false }
+lite-json = { git = "https://github.com/xlc/lite-json.git", branch ="master", default-features = false }
 log = { version = "0.4.14", default-features = false }
 pallet-timestamp = { version = "3.0.0", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 sp-consensus-aura = { default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07', version = '0.9.0' }

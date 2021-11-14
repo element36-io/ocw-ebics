@@ -17,9 +17,12 @@ use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
 use sp_std::vec::Vec;
 use sp_std::convert::TryFrom;
 
+use crate::types::{Transaction, IbanAccount, TransactionType, Payload, IbanBalance, StrVecBytes};
+
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
 
+pub mod types;
 #[cfg(test)]
 mod tests;
 /// Defines application identifier for crypto keys of this module.
@@ -164,6 +167,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			transaction: Transaction
 		) -> DispatchResultWithPostInfo {
+			// TO-DO
 			Ok(().into())
 		}
 
@@ -250,175 +254,6 @@ pub mod pallet {
 	pub(super) type IbanToAccount<T: Config> = StorageMap<_, Blake2_128Concat, StrVecBytes, T::AccountId, ValueQuery>;
 }
 
-/// String vector bytes
-pub type StrVecBytes = Vec<u8>;
-
-/// Iban balance type
-type IbanBalance = (StrVecBytes, u64);
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Payload<Public> {
-	number: u64,
-	public: Public,
-}
-
-impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
-	fn public(&self) -> T::Public {
-		self.public.clone()
-	}
-}
-
-/// Utility function for parsing value from json object
-///
-/// parse value of a given key from json object
-fn parse_value(key: &str, obj: &Vec<(Vec<char>, JsonValue)>) -> JsonValue {
-	let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq(key.chars())).unwrap();
-	v.clone()
-}
-
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
-pub enum TransactionType {
-	Incoming,
-	Outgoing,
-	None
-}
-
-/// implement default trait for transaction type
-impl Default for TransactionType {
-	fn default() -> Self {
-		Self::None
-	}
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
-pub struct Transaction {
-	// from
-	iban: StrVecBytes,
-	name: StrVecBytes,
-	currency: StrVecBytes,
-	amount: u128,
-	// to
-	reference: StrVecBytes,
-	tx_type: TransactionType
-}
-
-impl Transaction {
-	// Get single transaction instance from json
-	pub fn from_json_statement(json: &JsonValue, tx_type: &TransactionType) -> Option<Self> {
-		let transaction = match json {
-			JsonValue::Object(obj) => {
-				// log::info!("receiving obj {:?}", obj);
-				let iban = match parse_value("iban", obj) {
-					JsonValue::String(str) => str.iter().map(|c| *c as u8).collect::<Vec<_>>(),
-					_ => return None,
-				};
-				log::info!("Iban {:?}", core::str::from_utf8(&iban).unwrap_or("default"));
-				let name = match parse_value("name", obj) {
-					JsonValue::String(cur) => cur.iter().map(|c| *c as u8).collect::<Vec<_>>(),
-					_ => return None,
-				};
-				log::info!("name {:?}", core::str::from_utf8(&name).unwrap_or("default"));
-				let currency = match parse_value("currency", obj) {
-					JsonValue::String(cur) => cur.iter().map(|c| *c as u8).collect::<Vec<_>>(),
-					_ => return None,
-				};
-				log::info!("cur {:?}", core::str::from_utf8(&currency).unwrap_or("default"));
-				let amount = match parse_value("amount", obj) {
-					JsonValue::Number(num) => {
-						let exp = num.fraction_length.checked_sub(2).unwrap_or(0);
-						let balance = num.integer as u128 + (num.fraction / 10_u64.pow(exp)) as u128;
-						balance
-					},
-					_ => return None,
-				};
-				let reference = match parse_value("reference", obj) {
-					JsonValue::String(cur) => cur.iter().map(|c| *c as u8).collect::<Vec<_>>(),
-					_ => return None,
-				};
-				
-				Self {
-					iban,
-					name,
-					currency,
-					amount,
-					reference,
-					tx_type: *tx_type
-				}
-			},
-			_ => return None,
-		};
-		Some(transaction)
-	}
-	
-	// Parse transactions from json based on Type
-	pub fn parse_transactions(json: &JsonValue, transaction_type: TransactionType) -> Option<Vec<Self>> {
-		let parsed_transactions = match json {
-			JsonValue::Object(obj) => {
-				let transactions = match transaction_type {
-					TransactionType::Incoming => {
-						let incoming_transactions = match parse_value("incomingTransactions", obj) {
-							JsonValue::Array(txs) => {
-								txs.iter().map(|json| Self::from_json_statement(json, &transaction_type).unwrap_or(Default::default())).collect::<Vec<Transaction>>()
-							}
-							_ => return None,
-						};
-						incoming_transactions
-					},
-					TransactionType::Outgoing => {
-						let outgoing_transactions = match parse_value("outgoingTransactions", obj) {
-							JsonValue::Array(txs) => {
-								txs.iter().map(|json| Self::from_json_statement(json, &transaction_type).unwrap_or(Default::default())).collect::<Vec<Transaction>>()
-							}
-							_ => return None,
-						};
-						outgoing_transactions
-					},
-					_ => Default::default()
-				};
-				transactions
-			},
-			_ => return None
-		};
-		Some(parsed_transactions)
-	}
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
-pub struct IbanAccount {
-	iban: StrVecBytes,
-	balance: u128,
-	last_updated: u64
-}
-
-impl IbanAccount {
-	// decode from JsonValue object
-	pub fn from_json_value(json: &JsonValue) -> Option<Self> {
-		let iban_account = match json {
-			JsonValue::Object(obj) => {
-				let iban = match parse_value("iban", obj) {
-					JsonValue::String(str) => str.iter().map(|c| *c as u8).collect::<Vec<_>>(),
-					_ => return None,
-				};
-				let balance = match parse_value("balanceCL", obj) {
-					JsonValue::Number(num) => {
-						let exp = num.fraction_length.checked_sub(2).unwrap_or(0);
-						let balance = num.integer as u128 + (num.fraction / 10_u64.pow(exp)) as u128;
-						balance
-					},
-					_ => return None,
-				};
-
-				Self {
-					iban,
-					balance,
-					last_updated: 0
-				}
-			},
-			_ => return None,
-		};
-		Some(iban_account)
-	}
-}
 
 impl<T: Config> Pallet<T> {
 	// checks whether we should sync in the current timestamp
@@ -489,6 +324,7 @@ impl<T: Config> Pallet<T> {
 				let balance = <<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance::try_from(transaction.amount);
 				let unwrapped_balance = balance.unwrap_or_default();
 
+				// If receiver address of the transaction exists in our storage, we transfer the amount
 				if Self::iban_exists(transaction.reference.clone()) {
 					log::info!("transfering: {:?} to {:?}", &unwrapped_balance, &account_id);
 					let dest: T::AccountId = IbanToAccount::<T>::get(transaction.reference.clone()).into();
@@ -515,7 +351,9 @@ impl<T: Config> Pallet<T> {
 						},
 						Err(e) => log::info!("Encountered err: {:?}", e),
 					}
-				} else {
+				}
+				else {
+					/// We burn the amount here and settle the balance of the user
 					log::info!("burning: {:?} to {:?}", &unwrapped_balance, &account_id);
 
 					let res = T::Currency::burn(unwrapped_balance);
@@ -527,7 +365,7 @@ impl<T: Config> Pallet<T> {
 						ExistenceRequirement::KeepAlive
 					);
 					match settle_res {
-						Ok(val) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
+						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
 						Err(e) => log::info!("Encountered err burning"),
 					}
 				}
@@ -536,7 +374,8 @@ impl<T: Config> Pallet<T> {
 		};
 	}
 
-	// process minting 
+	/// Process list of transactions for a given iban account
+	/// 
 	#[cfg(feature = "std")]
 	fn process_transactions(iban: &IbanAccount, transactions: &Vec<Transaction>) {
 		for transaction in transactions {
@@ -566,6 +405,7 @@ impl<T: Config> Pallet<T> {
 							transaction
 						);
 					}
+
 					// if no iban mapping exists in the storage, create new AccountId for Iban
 					else {
 						let (pair, _, _) = <crypto::Pair as sp_core::Pair>::generate_with_phrase(None);
@@ -587,7 +427,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	// fetch json from the Ebics Service API using lite-json
+	/// Fetch json from the Ebics Service API
+	/// Return parsed json file
 	fn fetch_json<'a>(remote_url: &'a [u8]) -> Result<JsonValue, &str> {
 		let remote_url_str = core::str::from_utf8(remote_url)
 			.map_err(|_| "Error in converting remote_url to string")?;
@@ -615,6 +456,9 @@ impl<T: Config> Pallet<T> {
 		Ok(json_val)
 	}
 
+	/// Fetch transactions from ebics service
+	/// Parse the json and return a vector of statements
+	/// Process the statements
 	fn fetch_transactions_and_send_signed() -> Result<(), &'static str> {
 		log::info!("fetching statements");
 
@@ -653,19 +497,24 @@ impl<T: Config> Pallet<T> {
 		let remote_url = ApiUrl::<T>::get();
 		let json = Self::fetch_json(&remote_url[..]).unwrap();
 
-		let statements = match json {
-			JsonValue::Array(arr) => {
-				let mut balances: Vec<(IbanAccount, Vec<Transaction>)> = Vec::with_capacity(arr.capacity());
-				for val in arr.iter() {
+		let raw_array = json.as_array();
+
+		let statements = match raw_array {
+			Some(v) => {
+				let mut balances: Vec<(IbanAccount, Vec<Transaction>)> = Vec::with_capacity(v.len());
+				for val in v.iter() {
 					// extract iban account
-					let iban_account = IbanAccount::from_json_value(&val).unwrap();
+					let iban_account = match IbanAccount::from_json_value(&val) {
+						Some(account) => account,
+						None => Default::default(),
+					};
 
 					log::info!("parsed acc: {:?}", iban_account);
 
 					// extract transactions
 					// currently only incoming
-					let mut transactions = Transaction::parse_transactions(&val, TransactionType::Outgoing).unwrap();
-					let mut incoming_transactions = Transaction::parse_transactions(&val, TransactionType::Incoming).unwrap();
+					let mut transactions = Transaction::parse_transactions(&val, TransactionType::Outgoing).unwrap_or_default();
+					let mut incoming_transactions = Transaction::parse_transactions(&val, TransactionType::Incoming).unwrap_or_default();
 					
 					transactions.append(&mut incoming_transactions);
 					
@@ -673,7 +522,7 @@ impl<T: Config> Pallet<T> {
 				}
 				balances
 			},
-			_ => return Default::default(),
+			None => Default::default(),
 		};
 		statements
 	}
