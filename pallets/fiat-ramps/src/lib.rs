@@ -189,9 +189,6 @@ pub mod pallet {
 			log::info!("processing transactions...");
 			
 			for (iban_account, transactions) in statements {
-				log::info!("Minting for: {:?}", iban_account.iban.clone());
-				log::info!("Incoming tx: {:?}", transactions.clone());
-				
 				#[cfg(feature = "std")]
 				Self::process_transactions(&iban_account, &transactions);
 			}
@@ -509,7 +506,6 @@ impl<T: Config> Pallet<T> {
 						None => Default::default(),
 					};
 
-					log::info!("parsed acc: {:?}", iban_account);
 
 					// extract transactions
 					// currently only incoming

@@ -156,7 +156,6 @@ impl Transaction {
 							}
 							_ => return None,
 						};
-						log::info!("after parsed: {:?}", outgoing_transactions);
 						outgoing_transactions
 					},
 					_ => Default::default()
