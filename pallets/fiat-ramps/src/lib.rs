@@ -17,7 +17,7 @@ use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
 use sp_std::vec::Vec;
 use sp_std::convert::TryFrom;
 
-use crate::types::{Transaction, IbanAccount, TransactionType, Payload, IbanBalance, StrVecBytes};
+use crate::types::{Transaction, IbanAccount, TransactionType, IbanBalance, StrVecBytes};
 
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
@@ -113,27 +113,27 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T:Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn offchain_worker(block_number: T::BlockNumber) {
-			log::info!("Instantiating offchain worker");
+			log::info!("[OCW] Instantiating offchain worker");
 
 			let parent_hash = <frame_system::Pallet<T>>::block_hash(block_number - 1u32.into());
-			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
+			log::debug!("[OCW] Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
 			let should_sync = Self::should_sync();
 
-			log::info!("should sync: {}", &should_sync);
+			log::info!("[OCW] Syncing: {}", &should_sync);
 			
 			if !should_sync {
-				log::info!("Too early to sync");
+				log::error!("[OCW] Too early to sync");
 				return ();
 			}
 			let res = Self::fetch_transactions_and_send_signed();
 			// let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
 
 			if let Err(e) = res {
-				log::error!("Error: {}", e);
+				log::error!("[OCW] Error: {}", e);
 			} else {
 				let now = T::TimeProvider::now();
-				log::info!("setting last sync timestamp: {}", now.as_millis());
+				log::info!("[OCW] Last sync timestamp: {}", now.as_millis());
 				<LastSyncAt<T>>::put(now.as_millis());	
 			}
 		}
@@ -173,12 +173,12 @@ pub mod pallet {
 
 		/// Issue an amount of tokens from origin
 		///
-		/// This is used to process incoming transactions in the bank statements
+		/// This is used to process incoming transactions in the bank statement
 		///
 		/// Params:
 		/// - `iban_account` 
 		///
-		/// Emits: `MintedNewIban` event
+		/// Emits: `Mint` event
 		#[pallet::weight(10_000)]
 		pub fn mint_batch(
 			origin: OriginFor<T>,
@@ -186,7 +186,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _who = ensure_signed(origin)?;
 
-			log::info!("processing transactions...");
+			log::info!("[OCW] Processing mint batch");
 			
 			for (iban_account, transactions) in statements {
 				#[cfg(feature = "std")]
@@ -306,7 +306,7 @@ impl<T: Config> Pallet<T> {
 				let balance = <<T as pallet::Config>::Currency as fungible::Inspect<T::AccountId>>::Balance::try_from(transaction.amount);
 				let unwrapped_balance = balance.unwrap_or_default();
 
-				log::info!("minting {:?} to {:?}", &unwrapped_balance, &account_id);
+				log::info!("[OCW] Mint {:?} to {:?}", &unwrapped_balance, &account_id);
 				
 				let res = T::Currency::mint_into(
 					&account_id, 
@@ -314,7 +314,7 @@ impl<T: Config> Pallet<T> {
 				);
 				match res {
 					Ok(()) => Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
-					Err(e) => log::info!("Encountered err: {:?}", e),
+					Err(e) => log::error!("[OCW] Encountered err: {:?}", e),
 				};
 			},
 			TransactionType::Outgoing => {
@@ -346,12 +346,12 @@ impl<T: Config> Pallet<T> {
 								)
 							)
 						},
-						Err(e) => log::info!("Encountered err: {:?}", e),
+						Err(e) => log::error!("[OCW] Encountered err: {:?}", e),
 					}
 				}
 				else {
 					// We burn the amount here and settle the balance of the user
-					log::info!("burning: {:?} to {:?}", &unwrapped_balance, &account_id);
+					log::info!("[OCW] Burn: {:?} to {:?}", &unwrapped_balance, &account_id);
 
 					let res = T::Currency::burn(unwrapped_balance);
 					
@@ -363,11 +363,11 @@ impl<T: Config> Pallet<T> {
 					);
 					match settle_res {
 						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
-						Err(e) => log::info!("Encountered err burning"),
+						Err(_e) => log::error!("[OCW] Encountered err burning"),
 					}
 				}
 			},
-			_ => log::info!("Transaction type not supported yet!")
+			_ => log::info!("[OCW] Transaction type not supported yet!")
 		};
 	}
 
@@ -409,7 +409,7 @@ impl<T: Config> Pallet<T> {
 						let encoded = sp_core::Pair::public(&pair).encode();
 						let account_id = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
 						
-						log::info!("create new account: {:?}", &account_id);
+						log::info!("[OCW] Create new account: {:?}", &account_id);
 
 						Self::process_transaction(
 							&account_id, 
@@ -445,7 +445,7 @@ impl<T: Config> Pallet<T> {
 		
 		let json_str: &str = match core::str::from_utf8(&json_result) {
 			Ok(v) => v,
-			Err(e) => "Error parsing json"
+			Err(_e) => "Error parsing json"
 		};
 
 		let json_val = parse_json(json_str).expect("Invalid json");
@@ -457,7 +457,7 @@ impl<T: Config> Pallet<T> {
 	/// Parse the json and return a vector of statements
 	/// Process the statements
 	fn fetch_transactions_and_send_signed() -> Result<(), &'static str> {
-		log::info!("fetching statements");
+		log::info!("[OCW] Fetching statements");
 
 		// get extrinsic signer
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
@@ -474,9 +474,9 @@ impl<T: Config> Pallet<T> {
 		for (acc, res) in & results {
 			match res {
 				Ok(()) => {
-					log::info!("[{:?}] Submitted minting", acc.id)
+					log::info!("[OCW] [{:?}] Submitted minting", acc.id)
 				},
-				Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+				Err(e) => log::error!("[OCW] [{:?}] Failed to submit transaction: {:?}", acc.id, e),
 			}
 		}
 

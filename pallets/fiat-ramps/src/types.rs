@@ -189,6 +189,7 @@ impl IbanAccount {
             last_updated
         }
     }
+	
 	pub fn from_json_value(json: &JsonValue) -> Option<Self> {
         let raw_object = json.as_object();
 		let iban_account = match raw_object {
