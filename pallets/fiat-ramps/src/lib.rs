@@ -285,7 +285,7 @@ impl<T: Config> Pallet<T> {
 		});
 
 		match res {
-			Ok(now) => true,
+			Ok(_now) => true,
 			Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => false,
 			Err(MutateStorageError::ConcurrentModification(_)) => false
 		}
@@ -350,7 +350,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 				else {
-					/// We burn the amount here and settle the balance of the user
+					// We burn the amount here and settle the balance of the user
 					log::info!("burning: {:?} to {:?}", &unwrapped_balance, &account_id);
 
 					let res = T::Currency::burn(unwrapped_balance);
