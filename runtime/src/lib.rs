@@ -269,8 +269,13 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-/// Configure the pallet-template in pallets/template.
+/// Configure treasury pallet.
+impl treasury::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+}
 
+/// Configure the fiat-ramps pallet.
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 
 parameter_types! {
@@ -285,8 +290,8 @@ impl fiat_ramps::Config for Runtime {
 	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type Event = Event;
 	type Call = Call;
-	type Currency = pallet_balances::Pallet<Runtime>;
-	type TimeProvider = pallet_timestamp::Pallet<Runtime>;
+	type Currency = Balances;
+	type TimeProvider = Timestamp;
 	type MinimumInterval = MinimumInterval;
 	type UnsignedPriority = UnsignedPriority;
 	type Decimals = Decimals;

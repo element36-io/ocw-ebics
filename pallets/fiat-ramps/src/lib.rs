@@ -2,9 +2,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
-use frame_support::traits::{ExistenceRequirement, WithdrawReasons, fungible};
+use frame_support::traits::{ExistenceRequirement, WithdrawReasons};
 use frame_support::{pallet_prelude::ValidTransaction};
-use frame_support::traits::{Get, UnixTime, Currency, LockableCurrency, tokens::{ fungible::{ Mutate } }};
+use frame_support::traits::{Get, UnixTime, Currency, LockableCurrency};
 use frame_system::offchain::SendSignedTransaction;
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, Signer}};
@@ -34,6 +34,11 @@ mod tests;
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ramp");
 
+/// Account id of
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+/// Balance type
+pub type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
+
 /// Hardcoded inital test api endpoint
 const API_URL: &[u8] = b"https://61439649c5b553001717d029.mockapi.io/statements";
 
@@ -49,7 +54,8 @@ pub mod crypto {
 	app_crypto!(sr25519, KEY_TYPE);
 
 	pub struct OcwAuthId;
-	// implemented for ocw-runtime
+
+
 	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for OcwAuthId {
 		type RuntimeAppPublic = Public;
 		type GenericSignature = sp_core::sr25519::Signature;
@@ -76,7 +82,7 @@ pub mod pallet {
 
 	/// This is the pallet's configuration trait
 	#[pallet::config]
-	pub trait Config: pallet_timestamp::Config + frame_system::Config + CreateSignedTransaction<Call<Self>> {
+	pub trait Config: frame_system::Config + treasury::Config + CreateSignedTransaction<Call<Self>> {
 		/// The identifier type for an offchain worker.
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 		/// The overarching dispatch call type.
@@ -88,7 +94,7 @@ pub mod pallet {
 		type TimeProvider: UnixTime;
 
 		/// Currency type
-		type Currency: Currency<Self::AccountId> + LockableCurrency<Self::AccountId, Moment = Self::BlockNumber> + Mutate<Self::AccountId>;
+		type Currency: Currency<Self::AccountId> + LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
 
 		// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
 		#[pallet::constant]
@@ -154,10 +160,12 @@ pub mod pallet {
 		#[pallet::weight(1000)]
 		pub fn burn(
 			origin: OriginFor<T>,
-			transaction: Transaction
+			amount: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
-			// ensure_root()
-			// TO-DO
+			let who = ensure_signed(origin)?;
+
+			let burn_request = Self::create_burn_request(who, amount);
+
 			Ok(().into())
 		}
 
@@ -202,12 +210,13 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		NewBalanceEntry(IbanBalance),
 		NewAccount(T::AccountId),
-		Mint(T::AccountId, StrVecBytes, <<T as pallet::Config>::Currency as fungible::Inspect<T::AccountId>>::Balance),
-		Burn(T::AccountId, StrVecBytes, <<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance),
+		Mint(T::AccountId, StrVecBytes, BalanceOf<T>),
+		Burn(T::AccountId, StrVecBytes, BalanceOf<T>),
 		Transfer(
 			T::AccountId, StrVecBytes, 
 			T::AccountId, StrVecBytes, 
-			<<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance)
+			BalanceOf<T>
+		)
 	}
 
 	#[pallet::validate_unsigned]
@@ -303,34 +312,33 @@ impl<T: Config> Pallet<T> {
 	) {
 		match transaction.tx_type {
 			TransactionType::Incoming => {
-				let balance = <<T as pallet::Config>::Currency as fungible::Inspect<T::AccountId>>::Balance::try_from(transaction.amount);
-				let unwrapped_balance = balance.unwrap_or_default();
+				let amount: BalanceOf<T> = BalanceOf::try_from(transaction.amount).unwrap_or_default();
 
-				log::info!("[OCW] Mint {:?} to {:?}", &unwrapped_balance, &account_id);
+				log::info!("[OCW] Mint {:?} to {:?}", &amount, &account_id);
 				
-				let res = T::Currency::mint_into(
+				let res = <T as pallet::Config>::Currency::(
 					&account_id, 
-					unwrapped_balance.clone()
+					amount.clone()
 				);
 				match res {
-					Ok(()) => Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
+					Ok(()) => Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), amount)),
 					Err(e) => log::error!("[OCW] Encountered err: {:?}", e),
 				};
 			},
 			TransactionType::Outgoing => {
-				let balance = <<T as pallet::Config>::Currency as Currency<T::AccountId>>::Balance::try_from(transaction.amount);
-				let unwrapped_balance = balance.unwrap_or_default();
+				let amount: BalanceOf<T> = BalanceOf::try_from(transaction.amount).unwrap_or_default();
 
 				// If receiver address of the transaction exists in our storage, we transfer the amount
 				if Self::iban_exists(transaction.reference.clone()) {
-					log::info!("transfering: {:?} to {:?}", &unwrapped_balance, &account_id);
+					log::info!("transfering: {:?} to {:?}", &amount, &account_id);
+
 					let dest: T::AccountId = IbanToAccount::<T>::get(transaction.reference.clone()).into();
 
 					// perform transfer
-					let res = T::Currency::transfer(
+					let res = <T as pallet::Config>::Currency::transfer(
 						account_id, 
 						&dest, 
-						unwrapped_balance.clone(),
+						amount.clone(),
 						ExistenceRequirement::KeepAlive
 					);
 					
@@ -342,7 +350,7 @@ impl<T: Config> Pallet<T> {
 									transaction.iban.clone(),
 									dest, 
 									transaction.reference.clone(), 
-									unwrapped_balance
+									amount
 								)
 							)
 						},
@@ -351,18 +359,18 @@ impl<T: Config> Pallet<T> {
 				}
 				else {
 					// We burn the amount here and settle the balance of the user
-					log::info!("[OCW] Burn: {:?} to {:?}", &unwrapped_balance, &account_id);
+					log::info!("[OCW] Burn: {:?} to {:?}", &amount, &account_id);
 
-					let res = T::Currency::burn(unwrapped_balance);
+					let res = <T as pallet::Config>::Currency::burn(amount);
 					
-					let settle_res = T::Currency::settle(
+					let settle_res = <T as pallet::Config>::Currency::settle(
 						account_id,
 						res,
 						WithdrawReasons::TRANSFER,
 						ExistenceRequirement::KeepAlive
 					);
 					match settle_res {
-						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), unwrapped_balance)),
+						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), amount)),
 						Err(_e) => log::error!("[OCW] Encountered err burning"),
 					}
 				}
@@ -376,14 +384,15 @@ impl<T: Config> Pallet<T> {
 	#[cfg(feature = "std")]
 	fn process_transactions(iban: &IbanAccount, transactions: &Vec<Transaction>) {
 		for transaction in transactions {
-			// decode account id from reference
+
+			// decode destination account id from reference
 			let encoded = core::str::from_utf8(&transaction.reference).unwrap_or("default");
 
-			let possible_account_id = AccountId32::from_ss58check(encoded);
+			let possible_destination = AccountId32::from_ss58check(encoded);
 
 			// proces transaction based on the value of reference
 			// if decoding returns error, we look for the iban in the pallet storage
-			match possible_account_id {
+			match possible_destination {
 				Ok(account_id) => {
 					let encoded = account_id.encode();
 					let account = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
@@ -395,6 +404,7 @@ impl<T: Config> Pallet<T> {
 				},
 				Err(_e) => {
 					// if iban exists in our storage, get accountId from there
+					// this would be initiator of the transaction
 					if Self::iban_exists(iban.iban.clone()) {
 						let connected_account_id: T::AccountId = IbanToAccount::<T>::get(iban.iban.clone()).into();
 						Self::process_transaction(
