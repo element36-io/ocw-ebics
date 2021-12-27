@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
+use frame_support::PalletId;
 use frame_support::traits::{ExistenceRequirement, WithdrawReasons};
 use frame_support::{pallet_prelude::ValidTransaction};
 use frame_support::traits::{Get, UnixTime, Currency, LockableCurrency};
@@ -34,6 +35,10 @@ mod tests;
 /// The keys can be inserted manually via RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ramp");
 
+/// Pallet ID
+/// Account id will be derived from this pallet id.
+pub const PALLET_ID: PalletId = PalletId(*b"FiatRamps");
+
 /// Account id of
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 /// Balance type
@@ -54,7 +59,6 @@ pub mod crypto {
 	app_crypto!(sr25519, KEY_TYPE);
 
 	pub struct OcwAuthId;
-
 
 	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for OcwAuthId {
 		type RuntimeAppPublic = Public;
@@ -164,8 +168,16 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			let burn_request = Self::create_burn_request(who, amount);
+			// do basic validations
+			let balance = T::Currency::free_balance(&who);
 
+			ensure!(
+				balance >= amount,
+				"Not enough balance to burn",
+			);
+
+			// record burn request
+			<BurnRequests<T>>::insert(who, amount);
 			Ok(().into())
 		}
 
@@ -213,8 +225,8 @@ pub mod pallet {
 		Mint(T::AccountId, StrVecBytes, BalanceOf<T>),
 		Burn(T::AccountId, StrVecBytes, BalanceOf<T>),
 		Transfer(
-			T::AccountId, StrVecBytes, 
-			T::AccountId, StrVecBytes, 
+			StrVecBytes, // from
+			StrVecBytes, // to
 			BalanceOf<T>
 		)
 	}
@@ -231,10 +243,6 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::storage]
-	#[pallet::getter(fn iban_balances)]
-	pub(super) type IbanBalances<T: Config> = StorageMap<_, Blake2_128Concat, StrVecBytes, u64, ValueQuery>;
-
 	#[pallet::type_value]
 	pub(super) fn DefaultSync<T: Config>() -> u128 { 0 }
 
@@ -249,19 +257,26 @@ pub mod pallet {
 	#[pallet::getter(fn api_url)]
 	pub(super) type ApiUrl<T: Config> = StorageValue<_, StrVecBytes, ValueQuery, DefaultApi<T>>;
 
-	// mapping between internal AccountId to Iban-Account
-	#[pallet::storage]
-	#[pallet::getter(fn balances)]
-	pub(super) type Balances<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, IbanAccount, ValueQuery>;
-
 	// mapping between Iban to AccountId
 	#[pallet::storage]
 	#[pallet::getter(fn iban_to_account)]
 	pub(super) type IbanToAccount<T: Config> = StorageMap<_, Blake2_128Concat, StrVecBytes, T::AccountId, ValueQuery>;
+
+	// stores burn requests
+	// until they are confirmed by the bank as outgoing transaction
+	// transaction_id -> burn_request
+	#[pallet::storage]
+	#[pallet::getter(fn burn_request)]
+	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u128, (T::AccountId, BalanceOf<T>), ValueQuery>;
 }
 
 
 impl<T: Config> Pallet<T> {
+	/// AccountId associated with Pallet
+	fn account_id() -> T::AccountId {
+		PALLET_ID.into_account()
+	}
+
 	// checks whether we should sync in the current timestamp
 	fn should_sync() -> bool {
 		/// A friendlier name for the error that is going to be returned in case we are in the grace
@@ -307,49 +322,85 @@ impl<T: Config> Pallet<T> {
 
 	// process transaction and make changes in the iban accounts
 	fn process_transaction(
-		account_id: &T::AccountId, 
+		account_id: &T::AccountId,
+		iban: &StrVecBytes,
 		transaction: &Transaction, 
 	) {
+		let amount: BalanceOf<T> = BalanceOf::<T>::try_from(transaction.amount).unwrap_or_default();
+
 		match transaction.tx_type {
 			TransactionType::Incoming => {
-				let amount: BalanceOf<T> = BalanceOf::try_from(transaction.amount).unwrap_or_default();
+				// transaction iban field is the sender of the transaction
+				// we check if the iban is stored in our account,
+				// if it is here, we transfer the amount from the sender to the account_id (receiver)
+				if Self::iban_exists(transaction.iban.clone()) {
+					let sender = Self::iban_to_account(transaction.iban.clone());
+					
+					log::info!("[OCW] Transfer from {:?} to {:?} {:?}", sender, account_id, amount.clone());
 
-				log::info!("[OCW] Mint {:?} to {:?}", &amount, &account_id);
-				
-				let res = <T as pallet::Config>::Currency::(
-					&account_id, 
-					amount.clone()
-				);
-				match res {
-					Ok(()) => Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), amount)),
-					Err(e) => log::error!("[OCW] Encountered err: {:?}", e),
-				};
+					// make transfer from sender to receiver
+					match <T as pallet::Config>::Currency::transfer(
+						&sender,
+						&account_id, 
+						amount, 
+						ExistenceRequirement::AllowDeath
+					) {
+						Ok(_) => {
+							Self::deposit_event(
+								Event::Transfer(
+									iban.to_vec(), // from iban
+									transaction.iban.clone(), // to iban
+									amount
+								)
+							)
+						},
+						Err(e) => {
+							log::error!("[OCW] Transfer from {:?} to {:?} {:?} failed: {:?}", account_id, sender, amount.clone(), e);
+						}
+					}
+				}
+				// if the iban i.e sender is not on-chain, 
+				// we issue transaction amount to the account_id. 
+				// It is similar to minting.
+				else {
+					log::info!("[OCW] Mint {:?} to {:?}", &amount, &account_id);
+					
+					// mint tokens, returns a negative imbalance
+					let mint = <T as pallet::Config>::Currency::issue(
+						amount.clone()
+					);
+	
+					// deposit negative imbalance into the account
+					<T as pallet::Config>::Currency::resolve_creating(
+						&account_id,
+						mint
+					);
+	
+					Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), amount));
+				}
 			},
+			// In this case, transaction iban field is the receiver of the transaction
+			// we first check if the iban is stored in the storage
 			TransactionType::Outgoing => {
-				let amount: BalanceOf<T> = BalanceOf::try_from(transaction.amount).unwrap_or_default();
-
-				// If receiver address of the transaction exists in our storage, we transfer the amount
-				if Self::iban_exists(transaction.reference.clone()) {
+				// If receiver address of the transaction exists in our storage, 
+				// we transfer the amount
+				if Self::iban_exists(transaction.iban.clone()) {
 					log::info!("transfering: {:?} to {:?}", &amount, &account_id);
 
-					let dest: T::AccountId = IbanToAccount::<T>::get(transaction.reference.clone()).into();
-
+					let dest: T::AccountId = IbanToAccount::<T>::get(transaction.iban.clone()).into();
+					
 					// perform transfer
-					let res = <T as pallet::Config>::Currency::transfer(
+					match <T as pallet::Config>::Currency::transfer(
 						account_id, 
 						&dest, 
 						amount.clone(),
 						ExistenceRequirement::KeepAlive
-					);
-					
-					match res {
+					) {
 						Ok(()) => {
 							Self::deposit_event(
 								Event::Transfer(
-									account_id.clone(), 
-									transaction.iban.clone(),
-									dest, 
-									transaction.reference.clone(), 
+									iban.to_vec(), // from iban
+									transaction.iban.clone(), // to iban
 									amount
 								)
 							)
@@ -369,6 +420,7 @@ impl<T: Config> Pallet<T> {
 						WithdrawReasons::TRANSFER,
 						ExistenceRequirement::KeepAlive
 					);
+
 					match settle_res {
 						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), amount)),
 						Err(_e) => log::error!("[OCW] Encountered err burning"),
@@ -388,16 +440,15 @@ impl<T: Config> Pallet<T> {
 			// decode destination account id from reference
 			let encoded = core::str::from_utf8(&transaction.reference).unwrap_or("default");
 
-			let possible_destination = AccountId32::from_ss58check(encoded);
-
 			// proces transaction based on the value of reference
 			// if decoding returns error, we look for the iban in the pallet storage
-			match possible_destination {
+			match AccountId32::from_ss58check(encoded) {
 				Ok(account_id) => {
 					let encoded = account_id.encode();
 					let account = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
 					Self::process_transaction(
 						&account,
+						&iban.iban,
 						transaction,
 					);
 					<IbanToAccount<T>>::insert(iban.iban.clone(), account);
@@ -408,7 +459,8 @@ impl<T: Config> Pallet<T> {
 					if Self::iban_exists(iban.iban.clone()) {
 						let connected_account_id: T::AccountId = IbanToAccount::<T>::get(iban.iban.clone()).into();
 						Self::process_transaction(
-							&connected_account_id, 
+							&connected_account_id,
+							&iban.iban,
 							transaction
 						);
 					}
@@ -423,6 +475,7 @@ impl<T: Config> Pallet<T> {
 
 						Self::process_transaction(
 							&account_id, 
+							&iban.iban,
 							transaction,
 						);
 						Self::deposit_event(Event::NewAccount(account_id.clone()));
@@ -430,8 +483,12 @@ impl<T: Config> Pallet<T> {
 						<IbanToAccount<T>>::insert(iban.iban.clone(), account_id);
 					}
 				}
-			}			
+			}
 		}
+	}
+
+	fn create_burn_request() -> Result<(), &str> {
+
 	}
 
 	/// Fetch json from the Ebics Service API
