@@ -7,6 +7,7 @@ use frame_support::traits::{ExistenceRequirement, WithdrawReasons};
 use frame_support::{pallet_prelude::ValidTransaction};
 use frame_support::traits::{Get, UnixTime, Currency, LockableCurrency};
 use frame_system::offchain::SendSignedTransaction;
+use lite_json::{NumberValue, Serialize};
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, Signer}};
 use sp_core::{crypto::{KeyTypeId}};
@@ -17,6 +18,7 @@ use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
 	}};
 use sp_std::vec::Vec;
 use sp_std::convert::TryFrom;
+use sp_runtime::traits::AccountIdConversion;
 
 use crate::types::{Transaction, IbanAccount, TransactionType, IbanBalance, StrVecBytes};
 
@@ -37,7 +39,7 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ramp");
 
 /// Pallet ID
 /// Account id will be derived from this pallet id.
-pub const PALLET_ID: PalletId = PalletId(*b"FiatRamps");
+pub const PALLET_ID: PalletId = PalletId(*b"FiatRamp");
 
 /// Account id of
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -81,12 +83,13 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::{UnixTime}};
+	use frame_support::{pallet_prelude::*, traits::{UnixTime}, ensure};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::DispatchError;
 
-	/// This is the pallet's configuration trait
+	/// This is the pallet's    trait
 	#[pallet::config]
-	pub trait Config: frame_system::Config + treasury::Config + CreateSignedTransaction<Call<Self>> {
+	pub trait Config: frame_system::Config + CreateSignedTransaction<Call<Self>> {
 		/// The identifier type for an offchain worker.
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 		/// The overarching dispatch call type.
@@ -144,7 +147,6 @@ pub mod pallet {
 			} else {
 				let now = T::TimeProvider::now();
 				log::info!("[OCW] Last sync timestamp: {}", now.as_millis());
-				<LastSyncAt<T>>::put(now.as_millis());	
 			}
 		}
 	}
@@ -176,8 +178,13 @@ pub mod pallet {
 				"Not enough balance to burn",
 			);
 
-			// record burn request
-			<BurnRequests<T>>::insert(who, amount);
+			// transfer amount to this pallet's account
+			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
+				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
+
+			// actions related to burn
+			Self::create_burn_request(&who, amount);
+
 			Ok(().into())
 		}
 
@@ -224,6 +231,7 @@ pub mod pallet {
 		NewAccount(T::AccountId),
 		Mint(T::AccountId, StrVecBytes, BalanceOf<T>),
 		Burn(T::AccountId, StrVecBytes, BalanceOf<T>),
+		BurnRequest(u64, T::AccountId, BalanceOf<T>),
 		Transfer(
 			StrVecBytes, // from
 			StrVecBytes, // to
@@ -244,11 +252,11 @@ pub mod pallet {
 	}
 
 	#[pallet::type_value]
-	pub(super) fn DefaultSync<T: Config>() -> u128 { 0 }
+	pub(super) fn DefaultBurnCount<T: Config>() -> u64 { 0 }
 
 	#[pallet::storage]
-	#[pallet::getter(fn last_sync_at)]
-	pub(super) type LastSyncAt<T: Config> = StorageValue<_, u128, ValueQuery, DefaultSync<T>>;
+	#[pallet::getter(fn burn_request_count)]
+	pub(super) type BurnRequestCount<T: Config> = StorageValue<_, u64, ValueQuery, DefaultBurnCount<T>>;
 
 	#[pallet::type_value]
 	pub(super) fn DefaultApi<T: Config>() -> StrVecBytes { API_URL.iter().cloned().collect() }	
@@ -267,7 +275,20 @@ pub mod pallet {
 	// transaction_id -> burn_request
 	#[pallet::storage]
 	#[pallet::getter(fn burn_request)]
-	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u128, (T::AccountId, BalanceOf<T>), ValueQuery>;
+	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u64, (T::AccountId, BalanceOf<T>, BurnRequestStatus), ValueQuery>;
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum BurnRequestStatus {
+	Pending,
+	Failed,
+	Confirmed,
+}
+
+impl Default for BurnRequestStatus {
+	fn default() -> Self {
+		BurnRequestStatus::Pending
+	}
 }
 
 
@@ -339,7 +360,7 @@ impl<T: Config> Pallet<T> {
 					log::info!("[OCW] Transfer from {:?} to {:?} {:?}", sender, account_id, amount.clone());
 
 					// make transfer from sender to receiver
-					match <T as pallet::Config>::Currency::transfer(
+					match <T>::Currency::transfer(
 						&sender,
 						&account_id, 
 						amount, 
@@ -366,12 +387,12 @@ impl<T: Config> Pallet<T> {
 					log::info!("[OCW] Mint {:?} to {:?}", &amount, &account_id);
 					
 					// mint tokens, returns a negative imbalance
-					let mint = <T as pallet::Config>::Currency::issue(
+					let mint = <T>::Currency::issue(
 						amount.clone()
 					);
 	
 					// deposit negative imbalance into the account
-					<T as pallet::Config>::Currency::resolve_creating(
+					<T>::Currency::resolve_creating(
 						&account_id,
 						mint
 					);
@@ -412,9 +433,9 @@ impl<T: Config> Pallet<T> {
 					// We burn the amount here and settle the balance of the user
 					log::info!("[OCW] Burn: {:?} to {:?}", &amount, &account_id);
 
-					let res = <T as pallet::Config>::Currency::burn(amount);
+					let res = <T>::Currency::burn(amount);
 					
-					let settle_res = <T as pallet::Config>::Currency::settle(
+					let settle_res = <T>::Currency::settle(
 						account_id,
 						res,
 						WithdrawReasons::TRANSFER,
@@ -487,8 +508,134 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn create_burn_request() -> Result<(), &str> {
+	/// Perform actions related to burn request
+	fn create_burn_request(burner: &T::AccountId, amount: BalanceOf<T>) {
+		// get the latest burn request count
+		let request_id = Self::burn_request_count();
 
+		// record burn request
+		<BurnRequests<T>>::insert(request_id, (
+			burner.clone(),
+			amount,
+			BurnRequestStatus::Pending
+		));
+
+		// increment burn request count
+		<BurnRequestCount<T>>::mutate(|c| *c += 1);
+
+		// create burn request event
+		Self::deposit_event(Event::BurnRequest(request_id, burner.clone(), amount));
+	}
+
+	fn unpeg_request(
+		account_id: &T::AccountId, 
+		amount: BalanceOf<T>, 
+		iban: &StrVecBytes
+	) -> JsonValue {
+		let burn_amount = u128::decode(&mut &amount.encode()[..]).unwrap();
+
+		let integer = burn_amount / 100;
+		let fraction = burn_amount % 100;
+
+		let amount_json = NumberValue {
+			integer: integer as i64,
+			fraction: fraction as u64,
+			fraction_length: 2,
+			exponent: 0,
+		};
+
+		let iban_json = JsonValue::String(
+			iban[..].iter().map(|b| *b as char).collect::<Vec<char>>()
+		);
+
+		JsonValue::Object(
+			vec![
+				(
+					"amount".chars().into_iter().collect(), 
+					JsonValue::Number(amount_json)
+				),
+				(
+					"iban".chars().into_iter().collect(),
+					iban_json
+				),
+				(
+					"currency".chars().into_iter().collect(), 
+					JsonValue::String(vec!['E', 'U', 'R'])
+				),
+				(
+					"ourReference".chars().into_iter().collect(), 
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"purpose".chars().into_iter().collect(), 
+					JsonValue::String(account_id.to_string().chars().into_iter().collect())
+				),
+				(
+					"receipientBankName".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"receipientCity".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"receipientCountry".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"recipientName".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"recipientIban".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"recipientStreet".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"recipientStreetNr".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				),
+				(
+					"recipientZip".chars().into_iter().collect(),
+					JsonValue::String(vec!['e'])
+				)
+			]
+		)
+	}
+
+	fn unpeg(
+		account_id: &T::AccountId, 
+		iban: StrVecBytes, 
+		amount: BalanceOf<T>
+	) -> Result<(), &'static str> {
+		let remote_url = ApiUrl::<T>::get();
+		
+		let remote_url_str = core::str::from_utf8(&remote_url[..])
+			.map_err(|_| "Error in converting remote_url to string")?;
+		
+		// add /unpeg to the url
+		let remote_url_str = format!("{}/unpeg", remote_url_str);
+
+		let body = Self::unpeg_request(
+			&account_id,
+			amount,
+			&iban
+		);
+
+		let pending = rt_offchain::http::Request::post(
+			&remote_url_str,
+			body.serialize().as_slice()
+			)
+			.send()
+			.map_err(|_| "Error in sending http POST request")?;
+
+		let response = pending.wait()
+			.map_err(|_| "Error in waiting http response back")?;
+		
+		Ok(())
 	}
 
 	/// Fetch json from the Ebics Service API

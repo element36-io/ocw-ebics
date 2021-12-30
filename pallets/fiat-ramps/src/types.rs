@@ -26,7 +26,7 @@ impl Deserialize<u128> for u128 {
             .to_number()
             .map(|num| {
                 let exp = num.fraction_length.checked_sub(2).unwrap_or(0);
-                let balance = num.integer as u128 + (num.fraction / 10_u64.pow(exp)) as u128;
+                let balance = num.integer as u128 * 100 + (num.fraction / 10_u64.pow(exp)) as u128;
                 balance
             })
     }

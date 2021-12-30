@@ -283,7 +283,9 @@ parameter_types! {
 	// we set it at 5 block times
 	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
 	pub const UnsignedPriority: TransactionPriority = 1000;
-	pub const Decimals: u8 = 10;
+	/// We set decimals for fiat currencies to 2
+	/// (e.g. 1 EUR = 1.00 EUR)
+	pub const Decimals: u8 = 2;
 }
 
 impl fiat_ramps::Config for Runtime {
