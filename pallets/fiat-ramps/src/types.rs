@@ -208,3 +208,83 @@ impl IbanAccount {
 		Some(iban_account)
 	}
 }
+
+
+/// Unpeq request template
+pub fn unpeg_request(
+	account_id: &str, 
+	amount: u128, 
+	iban: &StrVecBytes
+) -> JsonValue {
+
+	let integer = amount / 100;
+	let fraction = amount % 100;
+
+	let amount_json = NumberValue {
+		integer: integer as i64,
+		fraction: fraction as u64,
+		fraction_length: 2,
+		exponent: 0,
+	};
+
+	let iban_json = JsonValue::String(
+		iban[..].iter().map(|b| *b as char).collect::<Vec<char>>()
+	);
+
+	JsonValue::Object(
+		vec![
+			(
+				"amount".chars().into_iter().collect(), 
+				JsonValue::Number(amount_json)
+			),
+			(
+				"iban".chars().into_iter().collect(),
+				iban_json
+			),
+			(
+				"currency".chars().into_iter().collect(), 
+				JsonValue::String(vec!['E', 'U', 'R'])
+			),
+			(
+				"ourReference".chars().into_iter().collect(), 
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"purpose".chars().into_iter().collect(), 
+				JsonValue::String(account_id.chars().into_iter().collect())
+			),
+			(
+				"receipientBankName".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"receipientCity".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"receipientCountry".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"recipientName".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"recipientIban".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"recipientStreet".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"recipientStreetNr".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			),
+			(
+				"recipientZip".chars().into_iter().collect(),
+				JsonValue::String(vec!['e'])
+			)
+		]
+	)
+}

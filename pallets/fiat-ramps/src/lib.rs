@@ -11,7 +11,7 @@ use lite_json::{NumberValue, Serialize};
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, Signer}};
 use sp_core::{crypto::{KeyTypeId}};
-use sp_runtime::AccountId32;
+use sp_runtime::{AccountId32, SaturatedConversion};
 use sp_runtime::offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef};
 use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
 		InvalidTransaction, TransactionValidity
@@ -20,7 +20,10 @@ use sp_std::vec::Vec;
 use sp_std::convert::TryFrom;
 use sp_runtime::traits::AccountIdConversion;
 
-use crate::types::{Transaction, IbanAccount, TransactionType, IbanBalance, StrVecBytes};
+use crate::types::{
+	Transaction, IbanAccount, unpeg_request,
+	TransactionType, IbanBalance, StrVecBytes
+};
 
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
@@ -527,85 +530,8 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::BurnRequest(request_id, burner.clone(), amount));
 	}
 
-	fn unpeg_request(
-		account_id: &T::AccountId, 
-		amount: BalanceOf<T>, 
-		iban: &StrVecBytes
-	) -> JsonValue {
-		let burn_amount = u128::decode(&mut &amount.encode()[..]).unwrap();
-
-		let integer = burn_amount / 100;
-		let fraction = burn_amount % 100;
-
-		let amount_json = NumberValue {
-			integer: integer as i64,
-			fraction: fraction as u64,
-			fraction_length: 2,
-			exponent: 0,
-		};
-
-		let iban_json = JsonValue::String(
-			iban[..].iter().map(|b| *b as char).collect::<Vec<char>>()
-		);
-
-		JsonValue::Object(
-			vec![
-				(
-					"amount".chars().into_iter().collect(), 
-					JsonValue::Number(amount_json)
-				),
-				(
-					"iban".chars().into_iter().collect(),
-					iban_json
-				),
-				(
-					"currency".chars().into_iter().collect(), 
-					JsonValue::String(vec!['E', 'U', 'R'])
-				),
-				(
-					"ourReference".chars().into_iter().collect(), 
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"purpose".chars().into_iter().collect(), 
-					JsonValue::String(account_id.to_string().chars().into_iter().collect())
-				),
-				(
-					"receipientBankName".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"receipientCity".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"receipientCountry".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"recipientName".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"recipientIban".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"recipientStreet".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"recipientStreetNr".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				),
-				(
-					"recipientZip".chars().into_iter().collect(),
-					JsonValue::String(vec!['e'])
-				)
-			]
-		)
-	}
-
+	/// Send unpeq request to the remote endpoint
+	/// Populates the unpeg request and sends it
 	fn unpeg(
 		account_id: &T::AccountId, 
 		iban: StrVecBytes, 
@@ -619,9 +545,11 @@ impl<T: Config> Pallet<T> {
 		// add /unpeg to the url
 		let remote_url_str = format!("{}/unpeg", remote_url_str);
 
-		let body = Self::unpeg_request(
-			&account_id,
-			amount,
+		let amount_u128 = amount.saturated_into::<u128>();
+		
+		let body = unpeg_request(
+			&account_id.to_string(),
+			amount_u128,
 			&iban
 		);
 
