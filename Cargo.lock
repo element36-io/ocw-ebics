@@ -1458,7 +1458,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-std",
- "treasury",
 ]
 
 [[package]]
@@ -3720,7 +3719,6 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
- "pallet-treasury",
  "parity-scale-codec",
  "sp-api",
  "sp-block-builder",
@@ -3734,7 +3732,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
- "treasury",
 ]
 
 [[package]]
@@ -4060,21 +4057,6 @@ dependencies = [
  "parity-scale-codec",
  "sp-api",
  "sp-runtime",
-]
-
-[[package]]
-name = "pallet-treasury"
-version = "3.0.0"
-source = "git+https://github.com/paritytech/substrate.git?tag=monthly-2021-07#83808aa815a9fbc528b76cd25ae1dec57e269771"
-dependencies = [
- "frame-support",
- "frame-system",
- "impl-trait-for-tuples",
- "pallet-balances",
- "parity-scale-codec",
- "serde",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

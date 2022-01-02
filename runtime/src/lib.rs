@@ -269,12 +269,6 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-/// Configure treasury pallet.
-impl treasury::Config for Runtime {
-	type Event = Event;
-	type Currency = Balances;
-}
-
 /// Configure the fiat-ramps pallet.
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 

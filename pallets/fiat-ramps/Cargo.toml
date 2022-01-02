@@ -21,9 +21,6 @@ sp-io = { version = "3.0.0", default-features = false, git = 'https://github.com
 sp-runtime = { version = "3.0.0", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 sp-std = { version = "3.0.0", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'monthly-2021-07' }
 
-# Internal packages
-treasury = { version = "1.0.0", default-features = false, path = "../treasury" }
-
 [features]
 default = ['std']
 std = [

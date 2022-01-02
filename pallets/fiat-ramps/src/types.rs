@@ -220,12 +220,12 @@ pub fn unpeg_request(
 	let integer = amount / 100;
 	let fraction = amount % 100;
 
-	let amount_json = NumberValue {
+	let amount_json = JsonValue::Number(NumberValue {
 		integer: integer as i64,
 		fraction: fraction as u64,
 		fraction_length: 2,
 		exponent: 0,
-	};
+	});
 
 	let iban_json = JsonValue::String(
 		iban[..].iter().map(|b| *b as char).collect::<Vec<char>>()
@@ -235,15 +235,19 @@ pub fn unpeg_request(
 		vec![
 			(
 				"amount".chars().into_iter().collect(), 
-				JsonValue::Number(amount_json)
+				amount_json
 			),
 			(
-				"iban".chars().into_iter().collect(),
-				iban_json
+				"clearingSystemMemberId".chars().into_iter().collect(),
+				JsonValue::String(vec!['H', 'Y', 'P', 'L'])
 			),
 			(
 				"currency".chars().into_iter().collect(), 
 				JsonValue::String(vec!['E', 'U', 'R'])
+			),
+			(
+				"nationalPayment".chars().into_iter().collect(),
+				JsonValue::Boolean(true)
 			),
 			(
 				"ourReference".chars().into_iter().collect(), 
@@ -271,7 +275,7 @@ pub fn unpeg_request(
 			),
 			(
 				"recipientIban".chars().into_iter().collect(),
-				JsonValue::String(vec!['e'])
+				iban_json
 			),
 			(
 				"recipientStreet".chars().into_iter().collect(),

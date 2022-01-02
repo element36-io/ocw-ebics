@@ -2,23 +2,35 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
-use frame_support::PalletId;
-use frame_support::traits::{ExistenceRequirement, WithdrawReasons};
-use frame_support::{pallet_prelude::ValidTransaction};
-use frame_support::traits::{Get, UnixTime, Currency, LockableCurrency};
+use frame_support::{
+	pallet_prelude::{ValidTransaction},
+	traits::{
+		Get, UnixTime, Currency, LockableCurrency,
+		ExistenceRequirement, WithdrawReasons
+	},
+	PalletId,
+};
 use frame_system::offchain::SendSignedTransaction;
 use lite_json::{NumberValue, Serialize};
 use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
 use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, Signer}};
 use sp_core::{crypto::{KeyTypeId}};
-use sp_runtime::{AccountId32, SaturatedConversion};
 use sp_runtime::offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef};
-use sp_runtime::{RuntimeDebug, offchain as rt_offchain, transaction_validity::{
-		InvalidTransaction, TransactionValidity
-	}};
-use sp_std::vec::Vec;
-use sp_std::convert::TryFrom;
-use sp_runtime::traits::AccountIdConversion;
+use sp_runtime::{
+	RuntimeDebug, offchain as rt_offchain,
+	AccountId32, SaturatedConversion,
+	transaction_validity::{
+		InvalidTransaction, TransactionValidity,
+	},
+	traits::{
+		AccountIdConversion
+	}
+};
+use sp_std::prelude::Vec;
+
+#[cfg(not(feature = "std"))]
+use sp_std::prelude::vec;
+use sp_std::convert::{TryFrom};
 
 use crate::types::{
 	Transaction, IbanAccount, unpeg_request,
@@ -88,7 +100,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{pallet_prelude::*, traits::{UnixTime}, ensure};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::DispatchError;
+	use sp_runtime::{DispatchError};
 
 	/// This is the pallet's    trait
 	#[pallet::config]
@@ -184,9 +196,73 @@ pub mod pallet {
 			// transfer amount to this pallet's account
 			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
 				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
+			
+			// check if IbanToAccount storage map contains who account, if no - return DispatchError::Other
+			let iban = IbanToAccount::<T>::iter().find(|(key, value)| value == &who);
+
+			ensure!(
+				iban.is_some(),
+				"No iban to burn",
+			);
 
 			// actions related to burn
-			Self::create_burn_request(&who, amount);
+			#[cfg(feature = "std")]
+			Self::unpeg(who, iban.unwrap().0, amount);
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(1000)]
+		pub fn burn_to_iban(
+			origin: OriginFor<T>,
+			amount: BalanceOf<T>,
+			iban: Vec<u8>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			
+			let balance = T::Currency::free_balance(&who);
+
+			ensure!(
+				balance >= amount,
+				"Not enough balance to burn",
+			);
+
+			// transfer amount to this pallet's account
+			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
+				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
+			
+			// actipns related to burn
+			#[cfg(feature = "std")]
+			Self::unpeg(who, iban, amount);
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(1000)]
+		pub fn burn_to_address(
+			origin: OriginFor<T>,
+			amount: BalanceOf<T>,
+			address: AccountIdOf<T>,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			
+			let balance = T::Currency::free_balance(&who);
+
+			ensure!(
+				balance >= amount,
+				"Not enough balance to burn",
+			);
+
+			// transfer amount to this pallet's account
+			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
+				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
+			
+			// check if IbanToAccount storage map contains who account, if no - return DispatchError::Other
+			let iban = IbanToAccount::<T>::iter().find(|(key, value)| value == &who);
+
+			// actions related to burn
+			#[cfg(feature = "std")]
+			Self::unpeg(address, iban.unwrap().0, amount);
 
 			Ok(().into())
 		}
@@ -532,8 +608,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Send unpeq request to the remote endpoint
 	/// Populates the unpeg request and sends it
+	#[cfg(feature = "std")]
 	fn unpeg(
-		account_id: &T::AccountId, 
+		account_id: AccountIdOf<T>,
 		iban: StrVecBytes, 
 		amount: BalanceOf<T>
 	) -> Result<(), &'static str> {
@@ -547,15 +624,19 @@ impl<T: Config> Pallet<T> {
 
 		let amount_u128 = amount.saturated_into::<u128>();
 		
+		// let account_str = core::str::from_utf8(&account_id[..])
+		// 	.map_err(|_| "Error in converting account_id to string")?;
+
 		let body = unpeg_request(
-			&account_id.to_string(),
-			amount_u128,
-			&iban
-		);
+				account_id.clone().to_ss58check(),
+				amount_u128,
+				&iban
+			)
+			.serialize();
 
 		let pending = rt_offchain::http::Request::post(
 			&remote_url_str,
-			body.serialize().as_slice()
+			vec![body]
 			)
 			.send()
 			.map_err(|_| "Error in sending http POST request")?;
@@ -563,6 +644,13 @@ impl<T: Config> Pallet<T> {
 		let response = pending.wait()
 			.map_err(|_| "Error in waiting http response back")?;
 		
+		if response.code != 200 {
+			return Err("Error in unpeg response");
+		}
+
+		// do unpeg related actions
+		Self::create_burn_request(&account_id, amount);
+
 		Ok(())
 	}
 
