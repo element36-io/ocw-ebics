@@ -26,7 +26,7 @@ use sp_runtime::{
 		AccountIdConversion
 	}
 };
-use sp_std::prelude::Vec;
+use sp_std::prelude::{Vec};
 use scale_info::prelude::format;
 
 #[cfg(not(feature = "std"))]
@@ -732,7 +732,7 @@ impl<T: Config> Pallet<T> {
 
 		// Send request to remote endpoint
 		let body = unpeg_request(
-				&format!("{}", account_id),
+				&format!("{:?}", account_id),
 				amount_u128,
 				&to_iban,
 				&reference
