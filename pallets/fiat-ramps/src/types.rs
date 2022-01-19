@@ -211,12 +211,19 @@ impl IbanAccount {
 
 
 /// Unpeq request template
+/// 
+/// # Arguments
+/// 
+/// `account_id` - Sender of the unpeq request
+/// `amount` - Amount of the unpeq request
+/// `iban` - IBAN of the receiver
+/// `reference` - Reference of the unpeq request, we save request id in this field
 pub fn unpeg_request(
 	account_id: &str, 
 	amount: u128, 
-	iban: &StrVecBytes
+	iban: &StrVecBytes,
+	reference: &str,
 ) -> JsonValue {
-
 	let integer = amount / 100;
 	let fraction = amount % 100;
 
@@ -251,7 +258,7 @@ pub fn unpeg_request(
 			),
 			(
 				"ourReference".chars().into_iter().collect(), 
-				JsonValue::String(vec!['e'])
+				JsonValue::String(reference.chars().into_iter().collect())
 			),
 			(
 				"purpose".chars().into_iter().collect(), 
@@ -259,7 +266,7 @@ pub fn unpeg_request(
 			),
 			(
 				"receipientBankName".chars().into_iter().collect(),
-				JsonValue::String(vec!['e'])
+				JsonValue::String(vec!['D', 'E', 'F'])
 			),
 			(
 				"receipientCity".chars().into_iter().collect(),
@@ -287,7 +294,7 @@ pub fn unpeg_request(
 			),
 			(
 				"recipientZip".chars().into_iter().collect(),
-				JsonValue::String(vec!['e'])
+				JsonValue::String(vec!['6', '3', '4', '0'])
 			)
 		]
 	)
