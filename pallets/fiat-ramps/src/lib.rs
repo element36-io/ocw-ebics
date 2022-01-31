@@ -103,7 +103,7 @@ pub mod pallet {
 	use frame_system::{pallet_prelude::*, ensure_signed};
 	use sp_runtime::{DispatchError};
 
-	/// This is the pallet's    trait
+	/// This is the pallet's trait
 	#[pallet::config]
 	pub trait Config: frame_system::Config + CreateSignedTransaction<Call<Self>> {
 		/// The identifier type for an offchain worker.
@@ -216,7 +216,13 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		// TO-DO
+		/// Generic burn extrinsic
+		/// 
+		/// Creates new burn request in the pallet and sends `unpeq` request to remote endpoint
+		/// 
+		/// # Arguments
+		/// 
+		/// `amount`: Amount of tokens to burn
 		#[pallet::weight(1000)]
 		pub fn burn(
 			origin: OriginFor<T>,
@@ -252,6 +258,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Similar to `burn` but burns `amount` by sending it to `iban`
+		/// 
+		/// # Arguments
+		/// 
+		/// `amount`: Amount of tokens to burn
+		/// `iban`: Iban account of the receiver
 		#[pallet::weight(1000)]
 		pub fn burn_to_iban(
 			origin: OriginFor<T>,
@@ -284,6 +296,12 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Similar to `burn` but burns `amount` by transfering it to `account` on-chain
+		/// 
+		/// # Arguments
+		/// 
+		/// `amount`: Amount of tokens to burn
+		/// `account`: AccountId of the receiver
 		#[pallet::weight(1000)]
 		pub fn burn_to_address(
 			origin: OriginFor<T>,
@@ -328,25 +346,29 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Issue an amount of tokens from origin
+		/// Processes new statements
 		///
-		/// This is used to process incoming transactions in the bank statement
+		/// This is used to process transactions in the bank statement
 		///
+		/// NOTE: This call can be called only by the offchain worker
 		/// Params:
 		/// 
 		/// `statements`: list of statements to process
 		/// 	`iban_account`: IBAN account connected to the statement
 		/// 	`Vec<Transaction>`: List of transactions to process
-		/// 
-		/// Emits: `Mint` event
 		#[pallet::weight(10_000)]
-		pub fn mint_batch(
+		pub fn process_statements(
 			origin: OriginFor<T>,
 			statements: Vec<(IbanAccount, Vec<Transaction>)>
 		) -> DispatchResultWithPostInfo {
-			let _who = ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
 
-			log::info!("[OCW] Processing mint batch");
+			log::info!("[OCW] Processing statments");
+
+			ensure!(
+				who == Self::offchain_worker_account(),
+				"No statements to process",
+			);
 			
 			for (iban_account, transactions) in statements {
 
@@ -382,7 +404,7 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::mint_batch(statements) = call {
+			if let Call::process_statements(statements) = call {
 				Self::validate_tx_parameters(statements)
 			} else {
 				InvalidTransaction::Call.into()
@@ -519,13 +541,14 @@ impl<T: Config> Pallet<T> {
 	/// 
 	/// # Arguments
 	/// 
-	/// - `account_id`: AccountId related to the transaction
+	/// - `account_id`: `AccountId mapped to the `iban`
 	/// - `iban`: This is the IBAN account of the user whose statement is being processed
 	/// - `transaction`: The transaction to be processed, can be either `Incoming` or `Outgoing`
 	fn process_transaction(
 		account_id: &T::AccountId,
 		iban: &StrVecBytes,
-		transaction: &Transaction, 
+		transaction: &Transaction,
+		reference: &str,
 	) {
 		let amount: BalanceOf<T> = BalanceOf::<T>::try_from(transaction.amount).unwrap_or_default();
 
@@ -642,11 +665,16 @@ impl<T: Config> Pallet<T> {
 	fn process_transactions(iban: &IbanAccount, transactions: &Vec<Transaction>) {
 		for transaction in transactions {
 			// decode destination account id from reference
-			let encoded = core::str::from_utf8(&transaction.reference).unwrap_or("default");
+			let reference_str = core::str::from_utf8(&transaction.reference).unwrap_or("default");
+
+			// Format of the reference is the following:
+			// Purpose:AccountId; ourReference:nonce(of burn request) 
+			// E.g, "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef:12",
+			let reference_decoded: Vec<&str> = reference_str.split(";").collect();
 
 			// proces transaction based on the value of reference
 			// if decoding returns error, we look for the iban in the pallet storage
-			match AccountId32::from_ss58check(encoded) {
+			match AccountId32::from_ss58check(&reference_decoded[0][5..].to_string()) {
 				Ok(account_id) => {
 					let encoded = account_id.encode();
 					let account = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
@@ -654,6 +682,7 @@ impl<T: Config> Pallet<T> {
 						&account,
 						&iban.iban,
 						transaction,
+						reference_decoded[1][9..].to_string()
 					);
 					<IbanToAccount<T>>::insert(iban.iban.clone(), account);
 				},
@@ -665,7 +694,8 @@ impl<T: Config> Pallet<T> {
 						Self::process_transaction(
 							&connected_account_id,
 							&iban.iban,
-							transaction
+							transaction,
+							reference_decoded[1][9..].to_string()
 						);
 					}
 
@@ -681,6 +711,7 @@ impl<T: Config> Pallet<T> {
 							&account_id, 
 							&iban.iban,
 							transaction,
+							reference_decoded[1][9..].to_string()
 						);
 						Self::deposit_event(Event::NewAccount(account_id.clone()));
 
@@ -804,12 +835,20 @@ impl<T: Config> Pallet<T> {
 			return Err("No local accounts available! Please, insert your keys!")
 		}
 
+		// Get statements from remote endpoint
+		let statements= Self::parse_statements();
+		
+		// If statements are empty, do nothing
+		if statements.is_empty() {
+			return Ok(())
+		}
+
 		let results = signer.send_signed_transaction(|_account| {
-			// Execute call to mint
-			let statements= Self::parse_statements();
-			Call::mint_batch(statements)
+			Call::process_statements(statements.clone())
 		});
-		for (acc, res) in & results {
+
+		// Process result of the extrinsic
+		for (acc, res) in &results {
 			match res {
 				Ok(()) => {
 					log::info!("[OCW] [{:?}] Submitted minting", acc.id)
