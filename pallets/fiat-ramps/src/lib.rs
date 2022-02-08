@@ -1,21 +1,35 @@
-//! A demonstration of an offchain worker that sends onchain callbacks
+//! Fiat on-off ramps offchain worker
+//! 
+//! Polls Nexus API at a given interval to get the latest bank statement and 
+//! updates the onchain state accordingly.
+//! 
+//! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
+// SCALE Codec imports
 use codec::{Decode, Encode};
+use scale_info::{TypeInfo, prelude::format};
+// Susbtrate specific imports
 use frame_support::{
-	pallet_prelude::{ValidTransaction},
+	pallet_prelude::*,
 	traits::{
 		Get, UnixTime, Currency, LockableCurrency,
 		ExistenceRequirement, WithdrawReasons
 	},
-	PalletId,
+	ensure, PalletId,
+	dispatch::DispatchResultWithPostInfo
 };
-use frame_system::offchain::SendSignedTransaction;
-use lite_json::{NumberValue, Serialize};
-use lite_json::{json::{JsonValue}, json_parser::{parse_json}};
-use frame_system::{offchain::{AppCrypto, CreateSignedTransaction, SignedPayload, SigningTypes, Signer}};
-use sp_core::{crypto::{KeyTypeId}};
-use sp_runtime::offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef};
+use frame_system::{
+	pallet_prelude::*, ensure_signed,
+	offchain::{
+		SignedPayload, 
+		SendSignedTransaction, 
+		SigningTypes, 
+		Signer,
+		CreateSignedTransaction,
+		AppCrypto
+	},
+};
 use sp_runtime::{
 	RuntimeDebug, offchain as rt_offchain,
 	AccountId32, SaturatedConversion,
@@ -24,14 +38,19 @@ use sp_runtime::{
 	},
 	traits::{
 		AccountIdConversion
-	}
+	},
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef}
 };
+use sp_core::{crypto::{KeyTypeId}};
 use sp_std::prelude::{Vec};
-use scale_info::prelude::format;
-
-#[cfg(not(feature = "std"))]
-use sp_std::prelude::vec;
+use sp_runtime::{DispatchError};
 use sp_std::convert::{TryFrom};
+// Other imports
+use lite_json::{
+	json::{JsonValue}, 
+	json_parser::{parse_json},
+    NumberValue, Serialize,
+};
 
 use crate::types::{
 	Transaction, IbanAccount, unpeg_request,
@@ -42,6 +61,7 @@ use crate::types::{
 use sp_core::{ crypto::Ss58Codec };
 
 pub mod types;
+
 #[cfg(test)]
 mod tests;
 /// Defines application identifier for crypto keys of this module.
@@ -99,14 +119,11 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::{UnixTime}, ensure, dispatch::DispatchResultWithPostInfo};
-	use frame_system::{pallet_prelude::*, ensure_signed};
-	use sp_runtime::{DispatchError};
 
 	/// This is the pallet's trait
 	#[pallet::config]
 	pub trait Config: frame_system::Config + CreateSignedTransaction<Call<Self>> {
-		/// The identifier type for an offchain worker.
+		/// The identifier type for an offchain SendSignedTransaction
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 		/// The overarching dispatch call type.
 		type Call: From<Call<Self>>;
@@ -361,17 +378,18 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			statements: Vec<(IbanAccount, Vec<Transaction>)>
 		) -> DispatchResultWithPostInfo {
+			// this can be called only by the sudo account
+
 			let who = ensure_signed(origin)?;
 
-			log::info!("[OCW] Processing statments");
+			log::info!("[OCW] Recieived from {:?}", who);
+			log::info!("[OCW] Pallet account: {:?}", Self::account_id());
 
-			ensure!(
-				who == Self::offchain_worker_account(),
-				"No statements to process",
-			);
+			ensure!(who == Self::account_id(), "Only OCW can call this function");
+
+			log::info!("[OCW] Processing statements");
 			
 			for (iban_account, transactions) in statements {
-
 				let should_process = Self::should_process_transactions(&iban_account);
 				
 				if should_process {
@@ -404,7 +422,7 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			if let Call::process_statements(statements) = call {
+			if let Call::process_statements { statements } = call {
 				Self::validate_tx_parameters(statements)
 			} else {
 				InvalidTransaction::Call.into()
@@ -446,8 +464,7 @@ pub mod pallet {
 	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u64, (T::AccountId, BalanceOf<T>, BurnRequestStatus), ValueQuery>;
 }
 
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BurnRequestStatus {
 	Pending,
 	Failed,
@@ -682,7 +699,7 @@ impl<T: Config> Pallet<T> {
 						&account,
 						&iban.iban,
 						transaction,
-						reference_decoded[1][9..].to_string()
+						&reference_decoded[1][9..].to_string()
 					);
 					<IbanToAccount<T>>::insert(iban.iban.clone(), account);
 				},
@@ -695,7 +712,7 @@ impl<T: Config> Pallet<T> {
 							&connected_account_id,
 							&iban.iban,
 							transaction,
-							reference_decoded[1][9..].to_string()
+							&reference_decoded[1][9..].to_string()
 						);
 					}
 
@@ -711,7 +728,7 @@ impl<T: Config> Pallet<T> {
 							&account_id, 
 							&iban.iban,
 							transaction,
-							reference_decoded[1][9..].to_string()
+							&reference_decoded[1][9..].to_string()
 						);
 						Self::deposit_event(Event::NewAccount(account_id.clone()));
 
@@ -844,7 +861,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let results = signer.send_signed_transaction(|_account| {
-			Call::process_statements(statements.clone())
+			Call::process_statements { statements: statements.clone() }
 		});
 
 		// Process result of the extrinsic
@@ -916,12 +933,5 @@ impl<T: Config> Pallet<T> {
 			.longevity(64)
 			.propagate(true)
 			.build()
-	}
-}
-
-impl<T: Config> rt_offchain::storage_lock::BlockNumberProvider for Pallet<T> {
-	type BlockNumber = T::BlockNumber;
-	fn current_block_number() -> Self::BlockNumber {
-		<frame_system::Pallet<T>>::block_number()
 	}
 }

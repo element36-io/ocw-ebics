@@ -32,7 +32,7 @@ impl Deserialize<u128> for u128 {
     }
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub(crate) struct Payload<Public> {
 	number: u64,
 	public: Public,
@@ -66,7 +66,7 @@ pub fn parse_object(key: &str, obj: &[(Vec<char>, lite_json::JsonValue)]) -> Jso
 
 
 /// 
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum TransactionType {
 	Incoming,
 	Outgoing,
@@ -79,7 +79,7 @@ impl Default for TransactionType {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, TypeInfo)]
 pub struct Transaction {
 	// from
 	pub iban: StrVecBytes,
@@ -170,7 +170,7 @@ impl Transaction {
 
 /// IbanAccount Type contains the basic information of an account
 /// 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, TypeInfo)]
 pub struct IbanAccount {
 	pub iban: StrVecBytes,
 	pub balance: u128,

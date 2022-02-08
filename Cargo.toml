@@ -2,7 +2,6 @@
 members = [
     'node',
     'pallets/fiat-ramps',
-    'pallets/treasury',
     'runtime',
 ]
 [profile.release]
