@@ -44,7 +44,7 @@ use sp_runtime::{
 use sp_core::{crypto::{KeyTypeId}};
 use sp_std::prelude::{Vec};
 use sp_runtime::{DispatchError};
-use sp_std::convert::{TryFrom};
+use sp_std::{ convert::{TryFrom}, vec };
 // Other imports
 use lite_json::{
 	json::{JsonValue}, 
@@ -145,7 +145,7 @@ pub mod pallet {
 		/// This is exposed so that it can be tuned for particular runtime, when
 		/// multiple pallets send unsigned transactions.
 		#[pallet::constant]
-		type UnsignedPriority: Get<TransactionPriority>;
+		type UnsignedPriority: Get<u64>;
 
 		/// Decimals of the internal token
 		#[pallet::constant]

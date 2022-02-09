@@ -15,7 +15,7 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 # Substrate packages
 frame-support = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = "devhub/latest" }
 frame-system = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
-sc-keystore = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate.git", tag = "devhub/latest" }
+sp-keystore = { version = "0.11.0", optional = true }
 sp-std = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
 sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
 sp-core = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
@@ -33,4 +33,5 @@ std = [
 	'log/std',
 	'lite-json/std',
 	'sp-core/std',
+	'sp-keystore'
 ]
