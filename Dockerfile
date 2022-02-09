@@ -21,4 +21,5 @@ RUN mkdir /app/target
 COPY --from=build /app/target /app/target
 WORKDIR /app/target
 EXPOSE 9944 30333 9933
-ENTRYPOINT ["/app/target/
+
+ENTRYPOINT ["/app/target/"]
