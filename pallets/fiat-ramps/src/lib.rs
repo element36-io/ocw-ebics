@@ -14,7 +14,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Get, UnixTime, Currency, LockableCurrency,
-		ExistenceRequirement, WithdrawReasons
+		ExistenceRequirement, WithdrawReasons, Imbalance
 	},
 	ensure, PalletId,
 	dispatch::DispatchResultWithPostInfo
@@ -83,7 +83,7 @@ pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 
 /// Hardcoded inital test api endpoint
-const API_URL: &[u8] = b"https://61439649c5b553001717d029.mockapi.io/statements";
+const API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1/bankstatements";
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrapper.
 /// We can utilize the supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -379,14 +379,12 @@ pub mod pallet {
 			statements: Vec<(IbanAccount, Vec<Transaction>)>
 		) -> DispatchResultWithPostInfo {
 			// this can be called only by the sudo account
-
 			let who = ensure_signed(origin)?;
 
 			log::info!("[OCW] Recieived from {:?}", who);
 			log::info!("[OCW] Pallet account: {:?}", Self::account_id());
 
-			ensure!(who == Self::account_id(), "Only OCW can call this function");
-
+			// TO-DO: need to make sure the signer is an OCW here
 			log::info!("[OCW] Processing statements");
 			
 			for (iban_account, transactions) in statements {
@@ -558,14 +556,14 @@ impl<T: Config> Pallet<T> {
 	/// 
 	/// # Arguments
 	/// 
-	/// - `account_id`: `AccountId mapped to the `iban`
+	/// - `account_id`: AccountId mapped to the `iban`
 	/// - `iban`: This is the IBAN account of the user whose statement is being processed
 	/// - `transaction`: The transaction to be processed, can be either `Incoming` or `Outgoing`
 	fn process_transaction(
 		account_id: &T::AccountId,
 		iban: &StrVecBytes,
 		transaction: &Transaction,
-		reference: &str,
+		_reference: &str,
 	) {
 		let amount: BalanceOf<T> = BalanceOf::<T>::try_from(transaction.amount).unwrap_or_default();
 
@@ -664,7 +662,7 @@ impl<T: Config> Pallet<T> {
 
 					match settle_res {
 						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), amount)),
-						Err(_e) => log::error!("[OCW] Encountered err burning"),
+						Err(e) => log::error!("[OCW] Encountered err: {:?}", e.peek()),
 					}
 				}
 			},
@@ -688,6 +686,9 @@ impl<T: Config> Pallet<T> {
 			// Purpose:AccountId; ourReference:nonce(of burn request) 
 			// E.g, "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef:12",
 			let reference_decoded: Vec<&str> = reference_str.split(";").collect();
+
+			log::info!("[OCW] Purpose: {}", reference_decoded[0]);
+			log::info!("[OCW] Reference: {}", reference_decoded[1]);
 
 			// proces transaction based on the value of reference
 			// if decoding returns error, we look for the iban in the pallet storage

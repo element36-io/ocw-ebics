@@ -1136,6 +1136,8 @@ dependencies = [
  "frame-system",
  "lite-json",
  "log",
+ "pallet-balances",
+ "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

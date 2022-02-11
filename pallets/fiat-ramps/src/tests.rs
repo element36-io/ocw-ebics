@@ -1,23 +1,29 @@
 use crate as fiat_ramps;
 use crate::*;
 use codec::Decode;
-use frame_support::{parameter_types};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32},
+};
 use sp_core::{
     offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
     sr25519::Signature,
     H256
 };
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 
 use sp_runtime::{ testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}};
 
+use types::{
+	Transaction, IbanAccount, unpeg_request,
+	TransactionType, StrVecBytes
+};
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+/// Balance of an account.
+pub type Balance = u128;
 
-// NOTE: Currently it is not possible to change the slot duration after the chain has started.
-//       Attempting to do so will brick block production.
-pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
+const MILLISECS_PER_BLOCK: u64 = 4000;
 
 //Mock runtime for our tests
 frame_support::construct_runtime!(
@@ -29,17 +35,18 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
         FiatRampsExample: fiat_ramps::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Aura: pallet_aura::{Pallet, Config<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
+	pub const BlockHashCount: u64 = 2400;
+
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -56,7 +63,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
@@ -72,27 +79,54 @@ impl frame_system::offchain::SigningTypes for Test {
 	type Signature = Signature;
 }
 
-impl pallet_aura::Config for Test {
-	type AuthorityId = AuraId;
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 10;
+	pub const MaxLocks: u32 = 50;
+}
+
+impl pallet_balances::Config for Test {
+	type MaxLocks = MaxLocks;
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	/// The type for recording an account's balance.
+	type Balance = Balance;
+	/// The ubiquitous event type.
+	type Event = Event;
+	type DustRemoval = ();
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
 }
 
 parameter_types! {
-	pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
+	pub const MinimumPeriod: u64 = 2;
 }
 
 impl pallet_timestamp::Config for Test {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
-	type OnTimestampSet = Aura;
+	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
+}
+
+parameter_types!{
+	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
+	pub const UnsignedPriority: u64 = 1000;
+	/// We set decimals for fiat currencies to 2
+	/// (e.g. 1 EUR = 1.00 EUR)
+	pub const Decimals: u8 = 2;
 }
 
 impl fiat_ramps::Config for Test {
 	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type Event = Event;
 	type Call = Call;
+	type Currency = Balances;
+	type TimeProvider = Timestamp;
+	type MinimumInterval = MinimumInterval;
 	type UnsignedPriority = UnsignedPriority;
+	type Decimals = Decimals;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -117,18 +151,12 @@ where
 	}
 }
 
-parameter_types! {
-	// interval in blocks between two consecutive unsigned transactions
-	pub const UnsignedInterval: u64 = 3;
-	pub const UnsignedPriority: u64 = 1000;
-}
-
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
-const TEST_API_URL: &[u8] = b"http://localhost:8093/ebics/api-v1/bankstatements";
+const TEST_API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1/bankstatements";
 
 #[test]
 fn it_works() {
@@ -217,68 +245,115 @@ fn should_fail_on_future_blocks() {
 	})
 }
 
-fn ebics_server_response(state: &mut testing::OffchainState) {
+/// Server response types
+enum ResponseTypes {
+	/// Response is empty
+	Empty,
+	/// Response contains only one statement
+	SingleStatement,
+	/// Response contains multiple statements
+	MultipleStatements,
+}
+
+/// Bank statement types
+enum StatementTypes {
+	/// Bank statement contains no transactions (usual case)
+	Empty,
+	/// Bank statement has `incomingTransactions` field populated
+	IncomingTransactions,
+	/// Bank statement has `outgoingTransactions` field populated
+	OutgoingTransactions,
+	/// Bank statement has `incomingTransactions` and `outgoingTransactions` fields populated
+	CompleteTransactions,
+}
+
+/// Get mock server response
+fn get_mock_response(
+	response: ResponseTypes,
+	statement: StatementTypes,
+) -> &str {
+	match response {
+		ResponseTypes::Empty => {
+			return r#"[]"#;
+		}
+		ResponseTypes::SingleStatement => {
+			match statement {
+				StatementTypes::Empty => {
+					return r#"[]"#;
+				}
+				StatementTypes::IncomingTransactions => {
+					// the transaction is coming from Bob to Alice
+					return r#"[
+						{
+							"iban": "CH2108307000289537320",
+							"balanceCL": 10000000,
+							"incomingTransactions": [
+								{
+									"iban": "CH4308307000289537312",
+									"name: "Alice",
+									"currency": "EUR",
+									"amount": 10000,
+									"reference": "Purp:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY; ourRef: none",
+								}
+							],
+							outgoingTransactions: []
+						}
+					]"#;
+				}
+				StatementTypes::OutgoingTransactions => {
+					// outgoing transaction is from Bob to Alice
+					return br#"[
+						{
+							"iban": "CH4308307000289537312",
+							"balanceCL": 10000000,
+							"incomingTransactions": [],
+							"outgoingTransactions": [
+								{
+									"iban": "CH2108307000289537320",
+									"name: "Alice",
+									"currency": "EUR",
+									"amount": 10000,
+									"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
+								}
+							]
+						}
+					]"#;
+				}
+				StatementTypes::CompleteTransactions => {
+					return br#"[
+						{
+							"iban": "CH1230116000289537313",
+							"balanceCL": 10000000,
+							"incomingTransaction": [
+								{
+									"iban": "CH4308307000289537312",
+									"name: "Alice",
+									"currency": "EUR",
+									"amount": 10000,
+									"reference": "Purp:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY; ourRef: none",
+								}
+							],
+							"outgoingTransactions": [
+								{
+									"iban": ""
+								}
+							]
+						}	
+					]"#;
+				}
+			}
+		}
+	}
+}
+
+/// Mock server response
+fn ebics_server_response(
+	state: &mut testing::OffchainState
+) {
 	state.expect_request(testing::PendingRequest {
 		method: "GET".into(),
 		uri: core::str::from_utf8(TEST_API_URL).unwrap().to_string(),
-		response: Some(br#"[
-			{
-			  "iban": "CH4308307000289537312",
-			  "balanceOP": 80842.45,
-			  "balanceOPCurrency": "CHF",
-			  "balanceCL": 80097.2,
-			  "balanceCLCurrency": "CHF",
-			  "balanceCLDate": "2021-02-28",
-			  "bookingDate": "2021-02-28",
-			  "validationDate": "2021-02-28",
-			  "incomingTransactions": [],
-			  "outgoingTransactions": [
-				{
-				  "iban": null,
-				  "name": null,
-				  "addrLine": [
-					"VISECA CARD SERVICES SA \nHagenholzstrasse 56 \nPostfach 7007 \n8050 Zuerich",
-					"ich"
-				  ],
-				  "currency": "CHF",
-				  "amount": 745.25,
-				  "reference": null,
-				  "endToEndId": null,
-				  "instrId": null,
-				  "msgId": null,
-				  "pmtInfId": null
-				}
-			  ]
-			},
-			{
-			  "iban": "CH2108307000289537320",
-			  "balanceOP": 0,
-			  "balanceOPCurrency": "CHF",
-			  "balanceCL": 110,
-			  "balanceCLCurrency": "CHF",
-			  "balanceCLDate": "2021-03-14",
-			  "bookingDate": "2021-03-14",
-			  "validationDate": "2021-03-14",
-			  "incomingTransactions": [
-				{
-				  "iban": "CH4308307000289537312",
-				  "name": null,
-				  "addrLine": [
-					"element36 AG \nBahnmatt 25 \n6340 Baar"
-				  ],
-				  "currency": "CHF",
-				  "amount": 100,
-				  "reference": "Testanweisung",
-				  "endToEndId": null,
-				  "instrId": null,
-				  "msgId": null,
-				  "pmtInfId": null
-				}
-			  ],
-			  "outgoingTransactions": []
-			}
-		  ]
-		  "#.to_vec()),
+		response: Some(br#""#.to_vec()),
 		  sent: true,
 		  ..Default::default()
 	});

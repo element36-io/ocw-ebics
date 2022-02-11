@@ -21,6 +21,10 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://g
 sp-core = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
 sp-io = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
 
+# for testing
+pallet-balances = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "devhub/latest" }
+pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "devhub/latest" }
+
 [features]
 default = ['std']
 std = [
