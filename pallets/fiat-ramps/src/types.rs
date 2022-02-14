@@ -172,8 +172,11 @@ impl Transaction {
 /// 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, TypeInfo)]
 pub struct IbanAccount {
+	/// IBAN number of the account
 	pub iban: StrVecBytes,
+	/// Closing balance of the account
 	pub balance: u128,
+	/// Last time the statement was updated
 	pub last_updated: u64
 }
 

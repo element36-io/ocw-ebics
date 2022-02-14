@@ -539,10 +539,11 @@ impl<T: Config> Pallet<T> {
 		// balance of the iban account on chain
 		let on_chain_balance = T::Currency::free_balance(&account_id);
 
-		// sync transactions if balances on chain and on the statement do not match
-		if on_chain_balance.saturated_into::<u128>() != iban_account.balance {
-			return true;
-		}
+		// TODO: uncomment this when we are sure
+		// // sync transactions if balances on chain and on the statement do not match
+		// if on_chain_balance.saturated_into::<u128>() != iban_account.balance {
+		// 	return true;
+		// }
 
 		return false;
 	}
@@ -560,8 +561,8 @@ impl<T: Config> Pallet<T> {
 	/// - `iban`: This is the IBAN account of the user whose statement is being processed
 	/// - `transaction`: The transaction to be processed, can be either `Incoming` or `Outgoing`
 	fn process_transaction(
-		account_id: &T::AccountId,
-		iban: &StrVecBytes,
+		source: Option<&T::AccountId>,
+		dest: Option<&T::AccountId>,
 		transaction: &Transaction,
 		_reference: &str,
 	) {
@@ -599,8 +600,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 				// if the iban i.e sender is not on-chain, 
-				// we issue transaction amount to the account_id. 
-				// It is similar to minting.
+				// we issue (mint) transaction amount to the account_id. 
 				else {
 					log::info!("[OCW] Mint {:?} to {:?}", &amount, &account_id);
 					
@@ -618,9 +618,9 @@ impl<T: Config> Pallet<T> {
 					Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), amount));
 				}
 			},
-			// In this case, transaction iban field is the receiver of the transaction
-			// we first check if the iban is stored in the storage
+			// In this case, transaction iban field is the destination of the transaction
 			TransactionType::Outgoing => {
+				// We first check if the iban is stored in the storage
 				// If receiver address of the transaction exists in our storage, 
 				// we transfer the amount
 				if Self::iban_exists(transaction.iban.clone()) {
@@ -689,6 +689,33 @@ impl<T: Config> Pallet<T> {
 
 			log::info!("[OCW] Purpose: {}", reference_decoded[0]);
 			log::info!("[OCW] Reference: {}", reference_decoded[1]);
+
+			// get destination account id 
+			let dest = match AccountId32::from_ss58check(&reference_decoded[0][5..]) {
+				Ok(dest) => Some(<T::AccountId>::decode(&mut &dest.encode()[..]).unwrap()),
+				Err(e) => {
+					log::error!("[OCW] Failed to decode destination account from reference");
+					match transaction.tx_type {
+						TransactionType::Outgoing => {
+							if Self::iban_exists(transaction.iban.clone()) {
+								Some(IbanToAccount::<T>::get(transaction.iban.clone()).into())
+							}
+							else {
+								None
+							}
+						},
+						TransactionType::Incoming => {
+							if Self::iban_exists(iban.iban.clone()) {
+								Some(IbanToAccount::<T>::get(iban.iban.clone()).into())
+							}
+							else {
+								None
+							}
+						},
+						_ => None
+					}
+				}
+			};
 
 			// proces transaction based on the value of reference
 			// if decoding returns error, we look for the iban in the pallet storage

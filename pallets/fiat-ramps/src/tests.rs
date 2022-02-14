@@ -271,26 +271,26 @@ enum StatementTypes {
 fn get_mock_response(
 	response: ResponseTypes,
 	statement: StatementTypes,
-) -> &str {
+) -> Vec<u8> {
 	match response {
 		ResponseTypes::Empty => {
-			return r#"[]"#;
+			return br#"[]"#.to_vec();
 		}
 		ResponseTypes::SingleStatement => {
 			match statement {
 				StatementTypes::Empty => {
-					return r#"[]"#;
+					return br#"[]"#.to_vec();
 				}
 				StatementTypes::IncomingTransactions => {
 					// the transaction is coming from Bob to Alice
-					return r#"[
+					return br#"[
 						{
 							"iban": "CH2108307000289537320",
 							"balanceCL": 10000000,
 							"incomingTransactions": [
 								{
 									"iban": "CH4308307000289537312",
-									"name: "Alice",
+									"name: "Bob",
 									"currency": "EUR",
 									"amount": 10000,
 									"reference": "Purp:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY; ourRef: none",
@@ -298,7 +298,7 @@ fn get_mock_response(
 							],
 							outgoingTransactions: []
 						}
-					]"#;
+					]"#.to_vec();
 				}
 				StatementTypes::OutgoingTransactions => {
 					// outgoing transaction is from Bob to Alice
@@ -317,7 +317,7 @@ fn get_mock_response(
 								}
 							]
 						}
-					]"#;
+					]"#.to_vec();
 				}
 				StatementTypes::CompleteTransactions => {
 					return br#"[
@@ -326,22 +326,103 @@ fn get_mock_response(
 							"balanceCL": 10000000,
 							"incomingTransaction": [
 								{
-									"iban": "CH4308307000289537312",
+									"iban": "CH2108307000289537320",
 									"name: "Alice",
 									"currency": "EUR",
-									"amount": 10000,
-									"reference": "Purp:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY; ourRef: none",
+									"amount": 15000,
+									"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
 								}
 							],
 							"outgoingTransactions": [
 								{
-									"iban": ""
+									"iban": "CH1230116000289537312",
+									"name: "Bob",
+									"currency": "EUR",
+									"amount": 15000,
+									"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
 								}
 							]
 						}	
-					]"#;
+					]"#.to_vec();
 				}
 			}
+		},
+		ResponseTypes::MultipleStatements => {
+			return br#"[
+				{
+					"iban": "CH1230116000289537313",
+					"balanceCL": 10000000,
+					"incomingTransaction": [
+						{
+							"iban": "CH2108307000289537320",
+							"name: "Alice",
+							"currency": "EUR",
+							"amount": 15000,
+							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
+						}
+					],
+					"outgoingTransactions": [
+						{
+							"iban": "CH1230116000289537312",
+							"name: "Bob",
+							"currency": "EUR",
+							"amount": 15000,
+							"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
+						}
+					]
+				},
+				{
+					"iban": "CH1230116000289537312",
+					"balanceCL": 10000000,
+					"incomingTransaction": [
+						{
+							"iban": "CH2108307000289537320",
+							"name: "Alice",
+							"currency": "EUR",
+							"amount": 15000,
+							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
+						}
+					],
+					"outgoingTransactions": [
+						{
+							"iban": "CH1230116000289537312",
+							"name: "Bob",
+							"currency": "EUR",
+							"amount": 15000,
+							"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
+						}
+					]
+				},
+				{
+					"iban": "CH1230116000289537313",
+					"balanceCL": 10000000,
+					"incomingTransaction": [
+						{
+							"iban": "CH2108307000289537320",
+							"name: "Alice",
+							"currency": "EUR",
+							"amount": 5000,
+							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
+						},
+						{
+							"iban": "CH1230116000289537312",
+							"name: "Bob",
+							"currency": "EUR",
+							"amount": 10000,
+							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
+						}
+					],
+					"outgoingTransactions": [
+						{
+							"iban": "CH1230116000289537312",
+							"name: "Bob",
+							"currency": "EUR",
+							"amount": 15000,
+							"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
+						}
+					]
+				}
+			]"#.to_vec();
 		}
 	}
 }
