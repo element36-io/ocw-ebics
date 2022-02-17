@@ -1,0 +1,53 @@
+{
+    "scenario_1": {
+        "name": "Scenario 1",
+        "action": {
+            "name": "unpeg",
+            "parameters": {
+                "amount": 1.1,
+                "clearingSystemMemberId": "HYPLCH22",
+                "currency": "EUR",
+                "nationalPayment": true,
+                "ourReference": "empty",
+                "purpose": "0x9A0cab4250613cb8437F06ecdEc64F4644Df4D87",
+                "receipientBankName": "Hypi Lenzburg AG",
+                "receipientCity": "Baar",
+                "receipientCountry": "CH",
+                "receipientIban": "CH1230116000289537313",
+                "receipientName": "element36 AG",
+                "receipientStreet": "Bahnmatt",
+                "receipientStreetNr": "25",
+                "receipientZip": "6340"
+            }
+        },
+        "result": {
+            "statements": [
+                {
+                    "iban": "CH2108307000289537320",
+                    "balanceOP": 82.7,
+                    "balanceOPCurrency": "EUR",
+                    "balanceCL": 82.7,
+                    "balanceCLCurrency": "EUR",
+                    "balanceCLDate": "2022-02-16",
+                    "bookingDate": "2022-02-16",
+                    "validationDate": "2022-02-16",
+                    "incomingTransactions": [],
+                    "outgoingTransactions": [
+                        {
+                            "iban": "CH1230116000289537313",
+                            "name": "element36 AG",
+                            "addrLine": null,
+                            "currency": "EUR",
+                            "amount": 1.1,
+                            "reference": "Purp:0x9A0cab4250613cb8437F06ecdEc64F4644Df4D87; ourRef:ref 2022-02-16T11:58:29.083",
+                            "endToEndId": "NOTPROVIDED",
+                            "instrId": "not set",
+                            "msgId": "not set",
+                            "pmtInfId": "leuf-p-17f0265ef37-11-1"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

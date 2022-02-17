@@ -403,12 +403,19 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// A new account has been created
 		NewAccount(T::AccountId),
+		/// New IBAN has been mapped to an account
 		IbanAccountMapped(T::AccountId, IbanAccount),
+		/// IBAN has been un-mapped from an account
 		IbanAccountUnmapped(T::AccountId, IbanAccount),
+		/// New minted tokens to an account
 		Mint(T::AccountId, StrVecBytes, BalanceOf<T>),
+		/// New burned tokens from an account
 		Burn(T::AccountId, StrVecBytes, BalanceOf<T>),
+		/// New Burn request has been made
 		BurnRequest(u64, T::AccountId, BalanceOf<T>),
+		/// Transfer event with IBAN numbers
 		Transfer(
 			StrVecBytes, // from
 			StrVecBytes, // to
@@ -537,7 +544,7 @@ impl<T: Config> Pallet<T> {
 		let account_id = Self::iban_to_account(iban_account.iban.clone());
 
 		// balance of the iban account on chain
-		let on_chain_balance = T::Currency::free_balance(&account_id);
+		let _on_chain_balance = T::Currency::free_balance(&account_id);
 
 		// TODO: uncomment this when we are sure
 		// // sync transactions if balances on chain and on the statement do not match
@@ -548,9 +555,44 @@ impl<T: Config> Pallet<T> {
 		return false;
 	}
 
-	/// Check if iban exists in the storage
+	/// Checks if iban is mapped to an account in the storage
 	fn iban_exists(iban: StrVecBytes) -> bool {
 		IbanToAccount::<T>::contains_key(iban)
+	}
+
+	/// Ensures that an IBAN  is mapped to an account in the storage
+	/// 
+	/// If necessary, creates new account
+	fn ensure_iban_is_mapped(
+		iban: StrVecBytes, 
+		account: Option<AccountIdOf<T>>
+	) -> AccountIdOf<T> {
+		// If iban is already mapped to account, return it
+		if Self::iban_exists(iban.clone()) {
+			return Self::iban_to_account(iban);
+		}
+		else {
+			match account {
+				Some(account_id) => {
+					// Simply map iban to account
+					IbanToAccount::<T>::insert(iban.clone(), account_id.clone());
+					return account_id;
+				}
+				None => {
+					// Generate new keypair
+					let (pair, _, _) = <crypto::Pair as sp_core::Pair>::generate_with_phrase(None);
+					
+					// Convert AccountId32 to AccountId
+					let encoded = sp_core::Pair::public(&pair).encode();
+					let new_account_id = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
+
+					// Map new account id to IBAN
+					IbanToAccount::<T>::insert(iban.clone(), new_account_id.clone());
+
+					return new_account_id;
+				}
+			}
+		}
 	}
 
 	/// Process a single transaction
@@ -561,113 +603,132 @@ impl<T: Config> Pallet<T> {
 	/// - `iban`: This is the IBAN account of the user whose statement is being processed
 	/// - `transaction`: The transaction to be processed, can be either `Incoming` or `Outgoing`
 	fn process_transaction(
-		source: Option<&T::AccountId>,
-		dest: Option<&T::AccountId>,
+		statement_owner: &AccountIdOf<T>,
+		statement_iban: &StrVecBytes,
+		source: Option<T::AccountId>,
+		dest: Option<T::AccountId>,
 		transaction: &Transaction,
-		_reference: &str,
+		reference: Option<u64>,
 	) {
 		let amount: BalanceOf<T> = BalanceOf::<T>::try_from(transaction.amount).unwrap_or_default();
 
 		match transaction.tx_type {
 			TransactionType::Incoming => {
-				// transaction iban field is the sender of the transaction
-				// we check if the iban is stored in our account,
-				// if it is here, we transfer the amount from the sender to the account_id (receiver)
-				if Self::iban_exists(transaction.iban.clone()) {
-					let sender = Self::iban_to_account(transaction.iban.clone());
-					
-					log::info!("[OCW] Transfer from {:?} to {:?} {:?}", sender, account_id, amount.clone());
+				match source {
+					Some(sender) => {
+						log::info!("[OCW] Transfer from {:?} to {:?} {:?}", sender, statement_owner, amount.clone());
 
-					// make transfer from sender to receiver
-					match <T>::Currency::transfer(
-						&sender,
-						&account_id, 
-						amount, 
-						ExistenceRequirement::AllowDeath
-					) {
-						Ok(_) => {
-							Self::deposit_event(
-								Event::Transfer(
-									iban.to_vec(), // from iban
-									transaction.iban.clone(), // to iban
-									amount
+						// make transfer from sender to statement owner
+						match <T>::Currency::transfer(
+							&sender,
+							statement_owner, 
+							amount, 
+							ExistenceRequirement::AllowDeath
+						) {
+							Ok(_) => {
+								Self::deposit_event(
+									Event::Transfer(
+										transaction.iban.clone(), // from iban
+										statement_iban.clone(), // to iban
+										amount
+									)
 								)
-							)
-						},
-						Err(e) => {
-							log::error!("[OCW] Transfer from {:?} to {:?} {:?} failed: {:?}", account_id, sender, amount.clone(), e);
+							},
+							Err(e) => {
+								log::error!(
+									"[OCW] Transfer from {:?} to {:?} {:?} failed: {:?}", 
+									&sender, 
+									statement_owner, 
+									amount.clone(), 
+									e
+								);
+							}
+						}
+					},
+					None => {
+						// Sender is not on-chain, therefore we simply mint to statement owner
+						log::info!("[OCW] Mint to {:?} {:?}", statement_owner, amount.clone());
+
+						// Returns negative imbalance
+						let mint = <T>::Currency::issue(
+							amount.clone()
+						);
+		
+						// deposit negative imbalance into the account
+						<T>::Currency::resolve_creating(
+							statement_owner,
+							mint
+						);
+		
+						Self::deposit_event(Event::Mint(statement_owner.clone(), statement_iban.clone(), amount));
+					}
+				}
+			}
+			TransactionType::Outgoing => {
+				match dest {
+					Some(receiver) => {
+						log::info!("[OCW] Transfer from {:?} to {:?} {:?}", statement_owner, receiver, amount.clone());
+
+						// make transfer from statement owner to receiver
+						match <T>::Currency::transfer(
+							statement_owner,
+							&receiver,
+							amount,
+							ExistenceRequirement::AllowDeath
+						) {
+							Ok(_) => {
+								Self::deposit_event(
+									Event::Transfer(
+										statement_iban.clone(), // from iban
+										transaction.iban.clone(), // to iban
+										amount
+									)
+								)
+							},
+							Err(e) => {
+								log::error!("[OCW] Transfer from {:?} to {:?} {:?} failed: {:?}", statement_owner, receiver, amount.clone(), e);
+							}
+						}
+					},
+					None => {
+						// Receiver is not on-chain, therefore we simply burn from statement owner
+						log::info!("[OCW] Burn from {:?} {:?}", statement_owner, amount.clone());
+
+						// Returns negative imbalance
+						let burn = <T>::Currency::burn(
+							amount.clone()
+						);
+		
+						// Burn negative imbalance from the account
+						let settle_burn = <T>::Currency::settle(
+							statement_owner,
+							burn,
+							WithdrawReasons::TRANSFER,
+							ExistenceRequirement::KeepAlive
+						);
+						
+						match settle_burn {
+							Ok(()) => {
+								Self::deposit_event(Event::Burn(statement_owner.clone(), transaction.iban.clone(), amount));
+								match reference {
+									Some(burn_request_nonce) => {
+										// If burn request nonce is set, we need to update Burn request status
+										BurnRequests::<T>::mutate(burn_request_nonce, |b| {
+											*b = (b.0.clone(), b.1.clone(), BurnRequestStatus::Confirmed)
+										});
+									},
+									None => {}
+								}
+							},
+							Err(e) => log::error!("[OCW] Encountered err: {:?}", e.peek()),
 						}
 					}
 				}
-				// if the iban i.e sender is not on-chain, 
-				// we issue (mint) transaction amount to the account_id. 
-				else {
-					log::info!("[OCW] Mint {:?} to {:?}", &amount, &account_id);
-					
-					// mint tokens, returns a negative imbalance
-					let mint = <T>::Currency::issue(
-						amount.clone()
-					);
-	
-					// deposit negative imbalance into the account
-					<T>::Currency::resolve_creating(
-						&account_id,
-						mint
-					);
-	
-					Self::deposit_event(Event::Mint(account_id.clone(), transaction.iban.clone(), amount));
-				}
-			},
-			// In this case, transaction iban field is the destination of the transaction
-			TransactionType::Outgoing => {
-				// We first check if the iban is stored in the storage
-				// If receiver address of the transaction exists in our storage, 
-				// we transfer the amount
-				if Self::iban_exists(transaction.iban.clone()) {
-					log::info!("transfering: {:?} to {:?}", &amount, &account_id);
-
-					let dest: T::AccountId = IbanToAccount::<T>::get(transaction.iban.clone()).into();
-					
-					// perform transfer
-					match <T as pallet::Config>::Currency::transfer(
-						account_id, 
-						&dest, 
-						amount.clone(),
-						ExistenceRequirement::KeepAlive
-					) {
-						Ok(()) => {
-							Self::deposit_event(
-								Event::Transfer(
-									iban.to_vec(), // from iban
-									transaction.iban.clone(), // to iban
-									amount
-								)
-							)
-						},
-						Err(e) => log::error!("[OCW] Encountered err: {:?}", e),
-					}
-				}
-				else {
-					// We burn the amount here and settle the balance of the user
-					log::info!("[OCW] Burn: {:?} to {:?}", &amount, &account_id);
-
-					let res = <T>::Currency::burn(amount);
-					
-					let settle_res = <T>::Currency::settle(
-						account_id,
-						res,
-						WithdrawReasons::TRANSFER,
-						ExistenceRequirement::KeepAlive
-					);
-
-					match settle_res {
-						Ok(()) => Self::deposit_event(Event::Burn(account_id.clone(), transaction.iban.clone(), amount)),
-						Err(e) => log::error!("[OCW] Encountered err: {:?}", e.peek()),
-					}
-				}
-			},
-			_ => log::info!("[OCW] Transaction type not supported yet!")
-		};
+			}
+			_ => {
+				log::error!("[OCW] Unknown transaction type: {:?}", transaction.tx_type);
+			}
+		}
 	}
 
 	/// Process list of transactions for a given iban account
@@ -677,7 +738,13 @@ impl<T: Config> Pallet<T> {
 	/// `iban: IbanAccount` - iban account to process transactions for
 	/// `transactions: Vec<Transaction>` - list of transactions to process
 	#[cfg(feature = "std")]
-	fn process_transactions(iban: &IbanAccount, transactions: &Vec<Transaction>) {
+	fn process_transactions(
+		iban: &IbanAccount, 
+		transactions: &Vec<Transaction>
+	) {
+		// Get account id of the statement owner
+		let statement_owner = Self::ensure_iban_is_mapped(iban.iban.clone(), None);
+
 		for transaction in transactions {
 			// decode destination account id from reference
 			let reference_str = core::str::from_utf8(&transaction.reference).unwrap_or("default");
@@ -690,20 +757,31 @@ impl<T: Config> Pallet<T> {
 			log::info!("[OCW] Purpose: {}", reference_decoded[0]);
 			log::info!("[OCW] Reference: {}", reference_decoded[1]);
 
-			// get destination account id 
+			// Source (initiator) of the transaction
+			let source: Option<AccountIdOf<T>> = match transaction.tx_type {
+				TransactionType::Incoming => {
+					if Self::iban_exists(transaction.iban.clone()) {
+						Some(IbanToAccount::<T>::get(transaction.iban.clone()).into())
+					} else {
+						None
+					}
+				}
+				TransactionType::Outgoing => {
+					if Self::iban_exists(iban.iban.clone()) {
+						Some(IbanToAccount::<T>::get(iban.clone().iban).into())
+					} else {
+						None
+					}
+				}
+				_ => None
+			};
+
+			// Destination (recipient) of the transaction
 			let dest = match AccountId32::from_ss58check(&reference_decoded[0][5..]) {
 				Ok(dest) => Some(<T::AccountId>::decode(&mut &dest.encode()[..]).unwrap()),
-				Err(e) => {
+				Err(_e) => {
 					log::error!("[OCW] Failed to decode destination account from reference");
 					match transaction.tx_type {
-						TransactionType::Outgoing => {
-							if Self::iban_exists(transaction.iban.clone()) {
-								Some(IbanToAccount::<T>::get(transaction.iban.clone()).into())
-							}
-							else {
-								None
-							}
-						},
 						TransactionType::Incoming => {
 							if Self::iban_exists(iban.iban.clone()) {
 								Some(IbanToAccount::<T>::get(iban.iban.clone()).into())
@@ -711,7 +789,15 @@ impl<T: Config> Pallet<T> {
 							else {
 								None
 							}
-						},
+						}
+						TransactionType::Outgoing => {
+							if Self::iban_exists(transaction.iban.clone()) {
+								Some(IbanToAccount::<T>::get(transaction.iban.clone()).into())
+							}
+							else {
+								None
+							}
+						}
 						_ => None
 					}
 				}
@@ -719,51 +805,14 @@ impl<T: Config> Pallet<T> {
 
 			// proces transaction based on the value of reference
 			// if decoding returns error, we look for the iban in the pallet storage
-			match AccountId32::from_ss58check(&reference_decoded[0][5..].to_string()) {
-				Ok(account_id) => {
-					let encoded = account_id.encode();
-					let account = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
-					Self::process_transaction(
-						&account,
-						&iban.iban,
-						transaction,
-						&reference_decoded[1][9..].to_string()
-					);
-					<IbanToAccount<T>>::insert(iban.iban.clone(), account);
-				},
-				Err(_e) => {
-					// if iban exists in our storage, get accountId from there
-					// this would be initiator of the transaction
-					if Self::iban_exists(iban.iban.clone()) {
-						let connected_account_id: T::AccountId = IbanToAccount::<T>::get(iban.iban.clone()).into();
-						Self::process_transaction(
-							&connected_account_id,
-							&iban.iban,
-							transaction,
-							&reference_decoded[1][9..].to_string()
-						);
-					}
-
-					// if no iban mapping exists in the storage, create new AccountId for Iban
-					else {
-						let (pair, _, _) = <crypto::Pair as sp_core::Pair>::generate_with_phrase(None);
-						let encoded = sp_core::Pair::public(&pair).encode();
-						let account_id = <T::AccountId>::decode(&mut &encoded[..]).unwrap();
-						
-						log::info!("[OCW] Create new account: {:?}", &account_id);
-
-						Self::process_transaction(
-							&account_id, 
-							&iban.iban,
-							transaction,
-							&reference_decoded[1][9..].to_string()
-						);
-						Self::deposit_event(Event::NewAccount(account_id.clone()));
-
-						<IbanToAccount<T>>::insert(iban.iban.clone(), account_id);
-					}
-				}
-			}
+			Self::process_transaction(
+				&statement_owner,
+				&iban.iban,
+				source, 
+				dest, 
+				transaction, 
+				reference_decoded[1][7..].parse::<u64>().ok()
+			);
 		}
 	}
 

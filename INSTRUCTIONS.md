@@ -35,4 +35,3 @@ pub struct Transaction {
 ### Offchain worker
 
 Offchain worker fetches the new bank statements every N blocks (currently it's 4 blocks, for better testing). Whenever it detects non-empty bank statements it sends a signed transaction to call `process_statements` call of the pallet. This call can only be called by offchain worker itself.
-
