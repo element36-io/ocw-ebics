@@ -4,7 +4,7 @@ Every time offchain worker runs, it queries the `/bankstatements` endpoint to ge
 
 ### Bank Statement
 
-Each bank statement has at least four fields: `iban`, `balanceCL`, 'incomingStatements' and `outgoingStatements`. A bank statement in our pallet is represented as the combination of `IbanAccount` and `Transaction` types:
+Each bank statement has at least four fields: `iban`, `balanceCL`, `incomingStatements` and `outgoingStatements`. A bank statement in our pallet is represented as the combination of `IbanAccount` and `Transaction` types:
 
 ```rust
 pub struct IbanAccount {
