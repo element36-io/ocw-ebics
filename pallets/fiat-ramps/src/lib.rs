@@ -563,6 +563,7 @@ impl<T: Config> Pallet<T> {
 	/// Ensures that an IBAN  is mapped to an account in the storage
 	/// 
 	/// If necessary, creates new account
+	#[cfg(feature = "std")]
 	fn ensure_iban_is_mapped(
 		iban: StrVecBytes, 
 		account: Option<AccountIdOf<T>>
@@ -588,7 +589,7 @@ impl<T: Config> Pallet<T> {
 
 					// Map new account id to IBAN
 					IbanToAccount::<T>::insert(iban.clone(), new_account_id.clone());
-
+					
 					return new_account_id;
 				}
 			}
