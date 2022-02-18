@@ -41,7 +41,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 
 	let mut chain_properties = Properties::new();
 
-	chain_properties.insert("tokenDecimals".into(), 9.into());
+	chain_properties.insert("tokenDecimals".into(), 6.into());
 	chain_properties.insert("tokenSymbol".into(), "EBC".into());
 
 	Ok(ChainSpec::from_genesis(
@@ -141,8 +141,8 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		balances: BalancesConfig {
-			// Configure endowed accounts with initial balance of 100_000_000 EBC
-			balances: endowed_accounts.iter().cloned().map(|k| (k, 1_000_000_000_000_000_000)).collect(),
+			// Configure endowed accounts with initial balance of 10_000 pEURO (pegged EURO, 6 decimals)
+			balances: endowed_accounts.iter().cloned().map(|k| (k, 10_000_000_000)).collect(),
 		},
 		aura: AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),

@@ -25,9 +25,11 @@ impl Deserialize<u128> for u128 {
         json.clone()
             .to_number()
             .map(|num| {
-                let exp = num.fraction_length.checked_sub(2).unwrap_or(0);
-                let balance = num.integer as u128 * 100 + (num.fraction / 10_u64.pow(exp)) as u128;
-                balance
+                let value_1 = num.integer as u128 * 10_u128.pow(num.exponent as u32 + 6);
+				let value_2 = num.fraction as u128 * 10_u128.pow(
+					num.exponent as u32 + 6 - num.fraction_length
+				);
+				value_1 + value_2
             })
     }
 }

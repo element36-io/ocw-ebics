@@ -193,6 +193,16 @@ fn should_make_http_call_and_parse() {
 }
 
 #[test]
+fn test_process_empty_statement() {
+
+} 
+
+#[test]
+fn test_process_single_statement() {
+
+}
+
+#[test]
 fn should_send_unsigned_transaction() {
 	let (offchain, state) = testing::TestOffchainExt::new();
 	let mut t = new_test_ext();

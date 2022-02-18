@@ -2,14 +2,10 @@
 //! 
 //! Polls Nexus API at a given interval to get the latest bank statement and 
 //! updates the onchain state accordingly.
-//! 
-//! 
 
 #![cfg_attr(not(feature = "std"), no_std)]
-// SCALE Codec imports
 use codec::{Decode, Encode};
 use scale_info::{TypeInfo, prelude::format};
-// Susbtrate specific imports
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
@@ -45,7 +41,7 @@ use sp_core::{crypto::{KeyTypeId}};
 use sp_std::prelude::{Vec};
 use sp_runtime::{DispatchError};
 use sp_std::{ convert::{TryFrom}, vec };
-// Other imports
+
 use lite_json::{
 	json::{JsonValue}, 
 	json_parser::{parse_json},
@@ -381,9 +377,6 @@ pub mod pallet {
 			// this can be called only by the sudo account
 			let who = ensure_signed(origin)?;
 
-			log::info!("[OCW] Recieived from {:?}", who);
-			log::info!("[OCW] Pallet account: {:?}", Self::account_id());
-
 			// TO-DO: need to make sure the signer is an OCW here
 			log::info!("[OCW] Processing statements");
 			
@@ -552,7 +545,7 @@ impl<T: Config> Pallet<T> {
 		// 	return true;
 		// }
 
-		return false;
+		return true;
 	}
 
 	/// Checks if iban is mapped to an account in the storage
@@ -589,7 +582,7 @@ impl<T: Config> Pallet<T> {
 
 					// Map new account id to IBAN
 					IbanToAccount::<T>::insert(iban.clone(), new_account_id.clone());
-					
+
 					return new_account_id;
 				}
 			}
