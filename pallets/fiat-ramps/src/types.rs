@@ -224,7 +224,7 @@ impl IbanAccount {
 /// `iban` - IBAN of the receiver
 /// `reference` - Reference of the unpeq request, we save request id in this field
 pub fn unpeg_request(
-	account_id: &str, 
+	dest: &str, 
 	amount: u128, 
 	iban: &StrVecBytes,
 	reference: &str,
@@ -267,7 +267,7 @@ pub fn unpeg_request(
 			),
 			(
 				"purpose".chars().into_iter().collect(), 
-				JsonValue::String(account_id.chars().into_iter().collect())
+				JsonValue::String(dest.chars().into_iter().collect())
 			),
 			(
 				"receipientBankName".chars().into_iter().collect(),

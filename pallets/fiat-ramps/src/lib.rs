@@ -168,11 +168,27 @@ pub mod pallet {
 				log::error!("[OCW] Too early to sync");
 				return ();
 			}
-			let res = Self::fetch_transactions_and_send_signed();
-			// let res = Self::fetch_iban_balance_and_send_unsigned(block_number);
+
+			// Choose which activity to perform
+			let activity = Self::choose_ocw_activity();
+
+			log::info!("[OCW] Current activity: {:?}", &activity);
+
+			let res = match activity {
+				OcwActivity::ProcessStatements => {
+					Self::fetch_transactions_and_send_signed()
+				},
+				OcwActivity::ProcessBurnRequests => {
+					Self::process_burn_requests()
+				},
+				_ => {
+					log::error!("[OCW] No activity to perform");
+					Ok(())
+				}
+			};
 
 			if let Err(e) = res {
-				log::error!("[OCW] Error: {}", e);
+				log::error!("[OCW] Error syncing with bank: {}", e);
 			} else {
 				let now = T::TimeProvider::now();
 				log::info!("[OCW] Last sync timestamp: {}", now.as_millis());
@@ -258,16 +274,24 @@ pub mod pallet {
 			let iban = IbanToAccount::<T>::iter().find(|(_, v)| *v == who)
 				.ok_or(DispatchError::Other("Can't find iban account"))?.0; 
 
-			// actions related to burn
-			#[cfg(feature = "std")]
-			match Self::unpeg(who, iban, amount) {
-				Ok(_) => {
-					log::info!("[OCW] Burn successful");
-				},
-				Err(e) => {
-					log::error!("[OCW] Burn failed: {}", e);
-				}
-			}
+			let request_id = Self::burn_request_count();
+
+			let burn_request = BurnRequest {
+				burner: who.clone(),
+				dest: Some(IbanToAccount::<T>::get(&iban)),
+				dest_iban: Some(iban.clone()),
+				amount,
+				status: BurnRequestStatus::Pending,
+			};
+
+			// Create new burn request in the storage
+			<BurnRequests<T>>::insert(request_id, burn_request.clone());
+			
+			// Increase burn request count
+			<BurnRequestCount<T>>::put(request_id + 1);
+
+			// create burn request event
+			Self::deposit_event(Event::BurnRequest(burn_request));
 
 			Ok(().into())
 		}
@@ -296,16 +320,26 @@ pub mod pallet {
 			// transfer amount to this pallet's account
 			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
 				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
-			
-			// actipns related to burn
-			match Self::unpeg(who, iban, amount) {
-				Ok(_) => {
-					log::info!("[OCW] Burn to iban successful");
-				},
-				Err(e) => {
-					log::error!("[OCW] Burn to iban failed: {}", e);
-				}
-			}
+
+			// Request id (nonce)
+			let request_id = Self::burn_request_count();
+
+			let burn_request = BurnRequest {
+				burner: who.clone(),
+				dest: Some(IbanToAccount::<T>::get(&iban)),
+				dest_iban: Some(iban.clone()),
+				amount,
+				status: BurnRequestStatus::Pending,
+			};
+
+			// Create new burn request in the storage
+			<BurnRequests<T>>::insert(request_id, burn_request.clone());
+
+			// Increase burn request count
+			<BurnRequestCount<T>>::put(request_id + 1);
+
+			// create burn request event
+			Self::deposit_event(Event::BurnRequest(burn_request));
 
 			Ok(().into())
 		}
@@ -338,15 +372,25 @@ pub mod pallet {
 			let iban = IbanToAccount::<T>::iter().find(|(_, v)| *v == who)
 				.ok_or(DispatchError::Other("Can't find iban account"))?.0; 
 
-			// actions related to burn
-			match Self::unpeg(address, iban, amount) {
-				Ok(_) => {
-					log::info!("[OCW] Burn to address successful");
-				},
-				Err(e) => {
-					log::error!("[OCW] Burn to address failed: {}", e);
-				}
-			}
+			// Request id (nonce)
+			let request_id = Self::burn_request_count();
+
+			let burn_request = BurnRequest {
+				burner: who.clone(),
+				dest: Some(address),
+				dest_iban: Some(iban.clone()),
+				amount,
+				status: BurnRequestStatus::Pending,
+			};
+
+			// Create new burn request in the storage
+			<BurnRequests<T>>::insert(request_id, burn_request.clone());
+			
+			// Increase burn request count
+			<BurnRequestCount<T>>::put(request_id + 1);
+
+			// create burn request event
+			Self::deposit_event(Event::BurnRequest(burn_request));
 
 			Ok(().into())
 		}
@@ -377,9 +421,16 @@ pub mod pallet {
 			statements: Vec<(IbanAccount, Vec<Transaction>)>
 		) -> DispatchResultWithPostInfo {
 			// this can be called only by the sudo account
-			let who = ensure_signed(origin)?;
+			let _who = ensure_signed(origin)?;
 
-			// TO-DO: need to make sure the signer is an OCW here
+			// // TO-DO: need to make sure the signer is an OCW here
+			// let signers = Signer::<T, T::AuthorityId>::all_accounts();
+
+			// ensure!(
+			// 	signers.contains(who.clone()),
+			// 	"[OCW] Only OCW can call this function",
+			// );
+
 			log::info!("[OCW] Processing statements");
 			
 			for (iban_account, transactions) in statements {
@@ -409,7 +460,7 @@ pub mod pallet {
 		/// New burned tokens from an account
 		Burn(T::AccountId, StrVecBytes, BalanceOf<T>),
 		/// New Burn request has been made
-		BurnRequest(u64, T::AccountId, BalanceOf<T>),
+		BurnRequest(BurnRequest<T::AccountId, BalanceOf<T>>),
 		/// Transfer event with IBAN numbers
 		Transfer(
 			StrVecBytes, // from
@@ -456,13 +507,14 @@ pub mod pallet {
 	/// transaction_id -> burn_request
 	#[pallet::storage]
 	#[pallet::getter(fn burn_request)]
-	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u64, (T::AccountId, BalanceOf<T>, BurnRequestStatus), ValueQuery>;
+	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u64, BurnRequest<T::AccountId, BalanceOf<T>>, ValueQuery>;
 }
 
 /// Status options for burn requests
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BurnRequestStatus {
 	Pending,
+	Sent,
 	Failed,
 	Confirmed,
 }
@@ -470,6 +522,27 @@ pub enum BurnRequestStatus {
 impl Default for BurnRequestStatus {
 	fn default() -> Self {
 		BurnRequestStatus::Pending
+	}
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub struct BurnRequest<Account: Default, Balance: Default> {
+	pub burner: Account,
+	pub dest: Option<Account>,
+	pub dest_iban: Option<StrVecBytes>,
+	pub amount: Balance,
+	pub status: BurnRequestStatus,
+}
+
+impl<Account: Default, Balance: Default> Default for BurnRequest<Account, Balance> {
+	fn default() -> Self {
+		BurnRequest {
+			burner: Default::default(),
+			dest: None,
+			dest_iban: None,
+			amount: Default::default(),
+			status: Default::default(),
+		}
 	}
 }
 
@@ -503,29 +576,33 @@ impl<T: Config> Pallet<T> {
 		PALLET_ID.into_account()
 	}
 
-	// /// Returns the action to take
-	// fn choose_ocw_activity() -> OcwActivity {
-	// 	// Get last activity recorded
-	// 	let last_activity_ref = StorageValueRef::persistent(b"fiat_ramps:last_activity");
+	/// Returns the action to take
+	fn choose_ocw_activity() -> OcwActivity {
+		// Get last activity recorded
+		let last_activity_ref = StorageValueRef::persistent(b"fiat_ramps:last_activity");
 		
-	// 	let last_activity= last_activity_ref.mutate(|val: Result<Option<u32>, StorageRetrievalError>| {
-	// 		match val {
-	// 			Ok(Some(activity)) => Ok(activity),
-	// 			_ => Ok(2),
-	// 		}
-	// 	});
+		// Fetch last activity and set new one
+		// Activity order is following: Process statements -> Process burn requests -> Do nothing -> Repeat
+		let last_activity= last_activity_ref.mutate(|val: Result<Option<OcwActivity>, StorageRetrievalError>| {
+			match val {
+				Ok(Some(activity)) => {
+					match activity {
+						OcwActivity::ProcessStatements => Ok(OcwActivity::ProcessBurnRequests),
+						OcwActivity::ProcessBurnRequests => Ok(OcwActivity::None),
+						OcwActivity::None => Ok(OcwActivity::ProcessStatements),
+					}
+				}
+				Ok(None) => Ok(OcwActivity::ProcessStatements),
+				_ => Ok(OcwActivity::None),
+			}
+		});
 
-	// 	match last_activity {
-	// 		Ok(activity) => {
-	// 			match activity {
-	// 				0 => OcwActivity::ProcessBurnRequests,
-	// 				1 => OcwActivity::None,
-	// 				2 => OcwActivity::ProcessStatements,
-	// 			}
-	// 		},
-	// 		_ => OcwActivity::None,
-	// 	}
-	// }
+		match last_activity {
+			Ok(activity) => activity,
+			Err(MutateStorageError::ValueFunctionFailed(())) => OcwActivity::ProcessStatements,
+			Err(MutateStorageError::ConcurrentModification(_)) => OcwActivity::None
+		}
+	}
 
 	/// checks whether we should sync in the current timestamp
 	fn should_sync() -> bool {
@@ -630,11 +707,14 @@ impl<T: Config> Pallet<T> {
 
 	/// Process a single transaction
 	/// 
-	/// # Arguments
+	/// ### Arguments
 	/// 
-	/// - `account_id`: AccountId mapped to the `iban`
-	/// - `iban`: This is the IBAN account of the user whose statement is being processed
-	/// - `transaction`: The transaction to be processed, can be either `Incoming` or `Outgoing`
+	/// - `statement_owner`: Owner of the statement we are processing
+	/// - `statement_iban`: IBAN number of the statement we are processing
+	/// - `source`: Source/sender of the transaction
+	/// - `dest`: Destination/receiver of the transaction
+	/// - `transaction`: Transaction data
+	/// - `reference`: Optional reference field (usually contains burn request id)
 	fn process_transaction(
 		statement_owner: &AccountIdOf<T>,
 		statement_iban: &StrVecBytes,
@@ -645,12 +725,13 @@ impl<T: Config> Pallet<T> {
 	) {
 		let amount: BalanceOf<T> = BalanceOf::<T>::try_from(transaction.amount).unwrap_or_default();
 
+		// Process transaction based on its type
 		match transaction.tx_type {
 			TransactionType::Incoming => {
 				match source {
 					Some(sender) => {
 						log::info!("[OCW] Transfer from {:?} to {:?} {:?}", sender, statement_owner, amount.clone());
-
+						
 						// make transfer from sender to statement owner
 						match <T>::Currency::transfer(
 							&sender,
@@ -710,6 +791,22 @@ impl<T: Config> Pallet<T> {
 							ExistenceRequirement::AllowDeath
 						) {
 							Ok(_) => {
+								match reference {
+									Some(request_id) => {
+										BurnRequests::<T>::mutate(request_id, |v| {
+											*v = BurnRequest {
+												status: BurnRequestStatus::Confirmed,
+												..v.clone()
+											}
+										});
+										Self::deposit_event(
+											Event::BurnRequest(
+												BurnRequests::<T>::get(request_id)
+											)
+										)
+									}
+									None => {}
+								}
 								Self::deposit_event(
 									Event::Transfer(
 										statement_iban.clone(), // from iban
@@ -727,6 +824,23 @@ impl<T: Config> Pallet<T> {
 						// Receiver is not on-chain, therefore we simply burn from statement owner
 						log::info!("[OCW] Burn from {:?} {:?}", statement_owner, amount.clone());
 
+						match reference {
+							Some(request_id) => {
+								BurnRequests::<T>::mutate(request_id, |v| {
+									*v = BurnRequest {
+										status: BurnRequestStatus::Confirmed,
+										..v.clone()
+									}
+								});
+								Self::deposit_event(
+									Event::BurnRequest(
+										BurnRequests::<T>::get(request_id)
+									)
+								)
+							},
+							None => {}
+						}
+
 						// Returns negative imbalance
 						let burn = <T>::Currency::burn(
 							amount.clone()
@@ -743,15 +857,6 @@ impl<T: Config> Pallet<T> {
 						match settle_burn {
 							Ok(()) => {
 								Self::deposit_event(Event::Burn(statement_owner.clone(), transaction.iban.clone(), amount));
-								match reference {
-									Some(burn_request_nonce) => {
-										// If burn request nonce is set, we need to update Burn request status
-										BurnRequests::<T>::mutate(burn_request_nonce, |b| {
-											*b = (b.0.clone(), b.1.clone(), BurnRequestStatus::Confirmed)
-										});
-									},
-									None => {}
-								}
 							},
 							Err(e) => log::error!("[OCW] Encountered err: {:?}", e.peek()),
 						}
@@ -836,43 +941,33 @@ impl<T: Config> Pallet<T> {
 				}
 			};
 
-			// proces transaction based on the value of reference
-			// if decoding returns error, we look for the iban in the pallet storage
+			// Proces transaction based on the value of reference
+			// If decoding returns error, we look for the iban in the pallet storage
 			Self::process_transaction(
 				&statement_owner,
 				&iban.iban,
 				source, 
 				dest, 
 				transaction, 
-				reference_decoded[1][7..].parse::<u64>().ok()
+				reference_decoded[1][7..].split_whitespace().collect::<String>().parse::<u64>().ok()
 			);
 		}
-	}
-
-	/// Perform actions related to burn request
-	fn create_burn_request(burner: &T::AccountId, amount: BalanceOf<T>, request_id: u64) {
-		// record burn request
-		<BurnRequests<T>>::insert(request_id, (
-			burner.clone(),
-			amount,
-			BurnRequestStatus::Pending
-		));
-
-		// create burn request event
-		Self::deposit_event(Event::BurnRequest(request_id, burner.clone(), amount));
 	}
 
 	/// Send unpeq request to the remote endpoint
 	/// Populates the unpeg request and sends it
 	///
-	/// # Arguments
+	/// Note: This function is not called from the runtime, but from the OCW module
+	/// 
+	/// ### Arguments
 	/// 
 	/// * `account_id` - AccountId of the burner, used to populate `purpose` field
 	/// * `to_iban` - IBAN destination
 	/// * `amount` - Amount to be burned
 	fn unpeg(
-		account_id: AccountIdOf<T>,
-		to_iban: StrVecBytes, 
+		request_id: u64,
+		dest: Option<AccountIdOf<T>>,
+		to_iban: Option<StrVecBytes>, 
 		amount: BalanceOf<T>
 	) -> Result<(), &'static str> {
 		let remote_url = ApiUrl::<T>::get();
@@ -885,18 +980,19 @@ impl<T: Config> Pallet<T> {
 
 		let amount_u128 = amount.saturated_into::<u128>();
 
-		// in the reference field, we save the nonce of the user
-		let reference = format!("{}", Self::burn_request_count());
+		// In the reference field, we save the request id (nonce)
+		let reference = format!("{}", request_id);
 
 		// Send request to remote endpoint
 		let body = unpeg_request(
-				&format!("{:?}", account_id),
+				&format!("{:?}", dest.unwrap_or(Self::account_id())),
 				amount_u128,
-				&to_iban,
+				&to_iban.unwrap_or(b"Withdraw cash".to_vec()),
 				&reference
 			)
 			.serialize();
 
+		// Send request to remote endpoint
 		let pending = rt_offchain::http::Request::post(
 			&remote_url_str,
 			vec![body]
@@ -911,11 +1007,45 @@ impl<T: Config> Pallet<T> {
 			return Err("Error in unpeg response");
 		}
 
-		// do unpeg related actions
-		Self::create_burn_request(&account_id, amount, Self::burn_request_count());
+		Ok(())
+	}
 
-		// increment burn request count
-		<BurnRequestCount<T>>::mutate(|c| *c += 1);
+	/// Process burn requets 
+	///
+	/// Processes registered burn requests, by sending http call to `unpeg` endpoint
+	fn process_burn_requests() -> Result<(), &'static str> {
+		for (request_id, burn_request) in <BurnRequests<T>>::iter() {
+			// Process burn requests that are either not processed yet or failed
+			if burn_request.status == BurnRequestStatus::Pending || burn_request.status == BurnRequestStatus::Failed {
+
+				// Send unpeg request
+				match Self::unpeg(
+					request_id, 
+					burn_request.dest,
+					burn_request.dest_iban, 
+					burn_request.amount
+				) {
+					Ok(_) => {
+						BurnRequests::<T>::mutate(
+							request_id, 
+							|v| *v = BurnRequest {
+								status: BurnRequestStatus::Sent,
+								..v.clone()
+							}
+						);
+					},
+					Err(_) => {
+						BurnRequests::<T>::mutate(
+							request_id, 
+							|v|*v = BurnRequest {
+								status: BurnRequestStatus::Failed,
+								..v.clone()
+							}
+						);
+					}
+				};
+			}
+		}
 
 		Ok(())
 	}
