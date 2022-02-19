@@ -4,9 +4,10 @@ use node_runtime::{
 };
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{sr25519, Pair, Public};
+use sp_core::{sr25519, Pair, Public, Decode};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
+// use hexlit::hex;
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -41,8 +42,12 @@ pub fn development_config() -> Result<ChainSpec, String> {
 
 	let mut chain_properties = Properties::new();
 
-	chain_properties.insert("tokenDecimals".into(), 6.into());
-	chain_properties.insert("tokenSymbol".into(), "EBC".into());
+	chain_properties.insert("tokenDecimals".into(), 10.into());
+	chain_properties.insert("tokenSymbol".into(), "pEURO".into());
+
+	// let ocw_account: [u8; 32] = hex!("004771ae35f923e82e77fafd1f4b1878cd4b372a7406c7b88125119f5ffbdc29");
+
+	// let ocw_account_id = AccountId::decode(&mut &ocw_account[..]).unwrap();
 
 	Ok(ChainSpec::from_genesis(
 		// Name
@@ -63,6 +68,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
 					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
+					// ocw_account_id.clone()
 				],
 				true,
 			)
@@ -141,8 +147,8 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		balances: BalancesConfig {
-			// Configure endowed accounts with initial balance of 10_000 pEURO (pegged EURO, 6 decimals)
-			balances: endowed_accounts.iter().cloned().map(|k| (k, 10_000_000_000)).collect(),
+			// Configure endowed accounts with initial balance of 10_000 pEURO (pegged EURO, 10 decimals)
+			balances: endowed_accounts.iter().cloned().map(|k| (k, 100_000_000_000_000)).collect(),
 		},
 		aura: AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),

@@ -25,9 +25,9 @@ impl Deserialize<u128> for u128 {
         json.clone()
             .to_number()
             .map(|num| {
-                let value_1 = num.integer as u128 * 10_u128.pow(num.exponent as u32 + 6);
+                let value_1 = num.integer as u128 * 10_u128.pow(num.exponent as u32 + 10);
 				let value_2 = num.fraction as u128 * 10_u128.pow(
-					num.exponent as u32 + 6 - num.fraction_length
+					num.exponent as u32 + 10 - num.fraction_length
 				);
 				value_1 + value_2
             })

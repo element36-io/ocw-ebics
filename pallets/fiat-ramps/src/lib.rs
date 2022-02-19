@@ -203,7 +203,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			AccountToIban::<T>::insert(who.clone(), iban.clone());
+			IbanToAccount::<T>::insert(iban.iban.clone(), who.clone());
 
 			Self::deposit_event(Event::IbanAccountMapped(who, iban));
 
@@ -222,7 +222,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			AccountToIban::<T>::remove(who.clone());
+			IbanToAccount::<T>::remove(iban.iban.clone());
 
 			Self::deposit_event(Event::IbanAccountUnmapped(who, iban));
 
@@ -255,11 +255,12 @@ pub mod pallet {
 			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
 				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
 			
-			let iban_account = AccountToIban::<T>::get(&who);
+			let iban = IbanToAccount::<T>::iter().find(|(_, v)| *v == who)
+				.ok_or(DispatchError::Other("Can't find iban account"))?.0; 
 
 			// actions related to burn
 			#[cfg(feature = "std")]
-			match Self::unpeg(who, iban_account.iban, amount) {
+			match Self::unpeg(who, iban, amount) {
 				Ok(_) => {
 					log::info!("[OCW] Burn successful");
 				},
@@ -334,10 +335,11 @@ pub mod pallet {
 			T::Currency::transfer(&who, &Self::account_id(), amount, ExistenceRequirement::AllowDeath)
 				.map_err(|_| DispatchError::Other("Can't burn funds"))?;
 			
-			let iban_account = AccountToIban::<T>::get(&who);
+			let iban = IbanToAccount::<T>::iter().find(|(_, v)| *v == who)
+				.ok_or(DispatchError::Other("Can't find iban account"))?.0; 
 
 			// actions related to burn
-			match Self::unpeg(address, iban_account.iban, amount) {
+			match Self::unpeg(address, iban, amount) {
 				Ok(_) => {
 					log::info!("[OCW] Burn to address successful");
 				},
@@ -449,11 +451,6 @@ pub mod pallet {
 	#[pallet::getter(fn iban_to_account)]
 	pub(super) type IbanToAccount<T: Config> = StorageMap<_, Blake2_128Concat, StrVecBytes, T::AccountId, ValueQuery>;
 
-	/// Mapping between AccountId and IbanAccount
-	#[pallet::storage]
-	#[pallet::getter(fn account_to_iban)]
-	pub(super) type AccountToIban<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, IbanAccount, ValueQuery>;
-
 	/// Stores burn requests
 	/// until they are confirmed by the bank as outgoing transaction
 	/// transaction_id -> burn_request
@@ -462,6 +459,7 @@ pub mod pallet {
 	pub (super) type BurnRequests<T: Config> = StorageMap<_, Blake2_128Concat, u64, (T::AccountId, BalanceOf<T>, BurnRequestStatus), ValueQuery>;
 }
 
+/// Status options for burn requests
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub enum BurnRequestStatus {
 	Pending,
@@ -475,11 +473,59 @@ impl Default for BurnRequestStatus {
 	}
 }
 
+/// Types of activities that can be performed by the OCW
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+pub enum OcwActivity {
+	ProcessStatements,
+	ProcessBurnRequests,
+	None,
+}
+
+impl Default for OcwActivity {
+	fn default() -> Self {
+		OcwActivity::None
+	}
+}
+
+impl From<u32> for OcwActivity {
+	fn from(activity: u32) -> Self {
+		match activity {
+			0 => OcwActivity::ProcessStatements,
+			1 => OcwActivity::ProcessBurnRequests,
+			_ => OcwActivity::None,
+		}
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// AccountId associated with Pallet
 	fn account_id() -> T::AccountId {
 		PALLET_ID.into_account()
 	}
+
+	// /// Returns the action to take
+	// fn choose_ocw_activity() -> OcwActivity {
+	// 	// Get last activity recorded
+	// 	let last_activity_ref = StorageValueRef::persistent(b"fiat_ramps:last_activity");
+		
+	// 	let last_activity= last_activity_ref.mutate(|val: Result<Option<u32>, StorageRetrievalError>| {
+	// 		match val {
+	// 			Ok(Some(activity)) => Ok(activity),
+	// 			_ => Ok(2),
+	// 		}
+	// 	});
+
+	// 	match last_activity {
+	// 		Ok(activity) => {
+	// 			match activity {
+	// 				0 => OcwActivity::ProcessBurnRequests,
+	// 				1 => OcwActivity::None,
+	// 				2 => OcwActivity::ProcessStatements,
+	// 			}
+	// 		},
+	// 		_ => OcwActivity::None,
+	// 	}
+	// }
 
 	/// checks whether we should sync in the current timestamp
 	fn should_sync() -> bool {
@@ -490,17 +536,10 @@ impl<T: Config> Pallet<T> {
 		let now = T::TimeProvider::now();
 		let minimum_interval = T::MinimumInterval::get();
 
-
 		// Start off by creating a reference to Local Storage value.
-		// Since the local storage is common for all offchain workers, it's a good practice
-		// to prepend your entry with the module name.
 		let val = StorageValueRef::persistent(b"fiat_ramps::last_sync");
-		// The Local Storage is persisted and shared between runs of the offchain workers,
-		// and offchain workers may run concurrently. We can use the `mutate` function, to
-		// write a storage entry in an atomic fashion. Under the hood it uses `compare_and_set`
-		// low-level method of local storage API, which means that only one worker
-		// will be able to "acquire a lock" and send a transaction if multiple workers
-		// happen to be executed concurrently.
+
+		// Retrieve the value from the storage.
 		let res = val.mutate(|last_sync: Result<Option<u128>, StorageRetrievalError>| {
 			match last_sync {
 				// If we already have a value in storage and the block number is recent enough

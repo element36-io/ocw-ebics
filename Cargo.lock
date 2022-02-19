@@ -1759,6 +1759,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b07f60793ff0a4d9cef0f18e63b5357e06209987153a64648c972c1e5aff336f"
 
 [[package]]
+name = "hexlit"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2004324a8c06e9870981595cda152497db8a49e12c944f99cefab2045136b0b"
+
+[[package]]
 name = "hmac"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3318,6 +3324,7 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
+ "hexlit",
  "jsonrpc-core",
  "node-runtime",
  "pallet-transaction-payment-rpc",
