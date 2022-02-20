@@ -229,13 +229,28 @@ pub fn unpeg_request(
 	iban: &StrVecBytes,
 	reference: &str,
 ) -> JsonValue {
-	let integer = amount / 100;
-	let fraction = amount % 100;
+
+	// First step is to convert amount to NumberValue type
+	let integer = amount / 1_000_000_0000;
+	let fraction = amount % 1_000_000_0000;
+
+	// Mutable copy of `fraction` that will be used to calculate length of the fraction
+	let mut fraction_copy = fraction.clone();
+
+	let fraction_length = {
+		let mut len = 0;
+		
+		while fraction_copy > 0 {
+			fraction_copy /= 10;
+			len += 1;
+		}
+		len
+	};
 
 	let amount_json = JsonValue::Number(NumberValue {
 		integer: integer as i64,
 		fraction: fraction as u64,
-		fraction_length: 2,
+		fraction_length,
 		exponent: 0,
 	});
 
@@ -282,23 +297,23 @@ pub fn unpeg_request(
 				JsonValue::String(vec!['e'])
 			),
 			(
-				"recipientName".chars().into_iter().collect(),
+				"receipientName".chars().into_iter().collect(),
 				JsonValue::String(vec!['e'])
 			),
 			(
-				"recipientIban".chars().into_iter().collect(),
+				"receipientIban".chars().into_iter().collect(),
 				iban_json
 			),
 			(
-				"recipientStreet".chars().into_iter().collect(),
+				"receipientStreet".chars().into_iter().collect(),
 				JsonValue::String(vec!['e'])
 			),
 			(
-				"recipientStreetNr".chars().into_iter().collect(),
+				"receipientStreetNr".chars().into_iter().collect(),
 				JsonValue::String(vec!['e'])
 			),
 			(
-				"recipientZip".chars().into_iter().collect(),
+				"receipientZip".chars().into_iter().collect(),
 				JsonValue::String(vec!['6', '3', '4', '0'])
 			)
 		]

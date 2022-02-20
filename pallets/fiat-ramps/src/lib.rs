@@ -79,7 +79,7 @@ pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 
 /// Hardcoded inital test api endpoint
-const API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1/bankstatements";
+const API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1";
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrapper.
 /// We can utilize the supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -783,30 +783,44 @@ impl<T: Config> Pallet<T> {
 					Some(receiver) => {
 						log::info!("[OCW] Transfer from {:?} to {:?} {:?}", statement_owner, receiver, amount.clone());
 
-						// make transfer from statement owner to receiver
-						match <T>::Currency::transfer(
-							statement_owner,
-							&receiver,
-							amount,
-							ExistenceRequirement::AllowDeath
-						) {
-							Ok(_) => {
-								match reference {
-									Some(request_id) => {
+						let burn_request = match reference {
+							Some(request_id) => {
+								match BurnRequests::<T>::try_get(request_id) {
+									Ok(request) => {
 										BurnRequests::<T>::mutate(request_id, |v| {
 											*v = BurnRequest {
 												status: BurnRequestStatus::Confirmed,
 												..v.clone()
 											}
 										});
-										Self::deposit_event(
-											Event::BurnRequest(
-												BurnRequests::<T>::get(request_id)
-											)
-										)
-									}
-									None => {}
+										Some(request)
+									},
+									_ => None
 								}
+							},
+							None => None
+						};
+
+						// Here we get the actual sender and receiver of the transaction
+						// If user has submitted burn request, his funds are stored in the pallet's account
+						// and if we detect that the reference field is populated with a burn request id,
+						// we can transfer the funds from the pallet's account to the specified destination
+						// account specified in the burn request.
+						//
+						// Otherwise, we simply transfer the funds from the statement owner to the receiver
+						let (from, to) = match burn_request {
+							Some(request) => (Self::account_id(), request.dest.unwrap_or(receiver.clone())),
+							None => (statement_owner.clone(), receiver.clone())
+						};
+						
+						// make transfer from statement owner to receiver
+						match <T>::Currency::transfer(
+							&from,
+							&to,
+							amount,
+							ExistenceRequirement::AllowDeath
+						) {
+							Ok(_) => {
 								Self::deposit_event(
 									Event::Transfer(
 										statement_iban.clone(), // from iban
@@ -824,23 +838,6 @@ impl<T: Config> Pallet<T> {
 						// Receiver is not on-chain, therefore we simply burn from statement owner
 						log::info!("[OCW] Burn from {:?} {:?}", statement_owner, amount.clone());
 
-						match reference {
-							Some(request_id) => {
-								BurnRequests::<T>::mutate(request_id, |v| {
-									*v = BurnRequest {
-										status: BurnRequestStatus::Confirmed,
-										..v.clone()
-									}
-								});
-								Self::deposit_event(
-									Event::BurnRequest(
-										BurnRequests::<T>::get(request_id)
-									)
-								)
-							},
-							None => {}
-						}
-
 						// Returns negative imbalance
 						let burn = <T>::Currency::burn(
 							amount.clone()
@@ -857,6 +854,38 @@ impl<T: Config> Pallet<T> {
 						match settle_burn {
 							Ok(()) => {
 								Self::deposit_event(Event::Burn(statement_owner.clone(), transaction.iban.clone(), amount));
+								
+								match reference {
+									Some(request_id) => {
+										BurnRequests::<T>::mutate(request_id, |v| {
+											*v = BurnRequest {
+												status: BurnRequestStatus::Confirmed,
+												..v.clone()
+											}
+										});
+										
+										let request = BurnRequests::<T>::get(request_id);
+
+										Self::deposit_event(Event::BurnRequest(request.clone()));
+
+										// Returns negative imbalance
+										let burn = <T>::Currency::burn(
+											request.amount
+										);
+						
+										// Burn negative imbalance from the account
+										match <T>::Currency::settle(
+											&Self::account_id(),
+											burn,
+											WithdrawReasons::TRANSFER,
+											ExistenceRequirement::KeepAlive
+										) {
+											Ok(()) => log::info!("[OCW] Burn from pallet {:?} {:?}", Self::account_id(), request.amount),
+											_ => log::info!("[OCW] Failed to burn from account {:?} {:?}", Self::account_id(), request.amount)
+										}
+									},
+									None => {}
+								}
 							},
 							Err(e) => log::error!("[OCW] Encountered err: {:?}", e.peek()),
 						}
@@ -992,16 +1021,21 @@ impl<T: Config> Pallet<T> {
 			)
 			.serialize();
 
-		// Send request to remote endpoint
-		let pending = rt_offchain::http::Request::post(
-			&remote_url_str,
-			vec![body]
-			)
+		log::info!("[OCW] Sending unpeg request to {}", remote_url_str);
+
+		let post_request = rt_offchain::http::Request::new(&remote_url_str)
+			.body(vec![body])
+			.add_header("Content-Type", "application/json")
+			.add_header("accept", "*/*")
 			.send()
 			.map_err(|_| "Error in sending http POST request")?;
 
-		let response = pending.wait()
+		log::info!("[OCW] Request sent to {}", remote_url_str);
+
+		let response = post_request.wait()
 			.map_err(|_| "Error in waiting http response back")?;
+
+		log::info!("[OCW] Unpeg response received {:?}", response.code);
 		
 		if response.code != 200 {
 			return Err("Error in unpeg response");
@@ -1026,6 +1060,7 @@ impl<T: Config> Pallet<T> {
 					burn_request.amount
 				) {
 					Ok(_) => {
+						log::info!("[OCW] Unpeq request successfull");
 						BurnRequests::<T>::mutate(
 							request_id, 
 							|v| *v = BurnRequest {
@@ -1034,7 +1069,8 @@ impl<T: Config> Pallet<T> {
 							}
 						);
 					},
-					Err(_) => {
+					Err(e) => {
+						log::info!("[OCW] Unpeq request failed {}", e);
 						BurnRequests::<T>::mutate(
 							request_id, 
 							|v|*v = BurnRequest {
@@ -1056,7 +1092,9 @@ impl<T: Config> Pallet<T> {
 		let remote_url_str = core::str::from_utf8(remote_url)
 			.map_err(|_| "Error in converting remote_url to string")?;
 
-		let pending = rt_offchain::http::Request::get(remote_url_str).send()
+		let remote_url = format!("{}/bankstatements", remote_url_str);
+
+		let pending = rt_offchain::http::Request::get(&remote_url).send()
 			.map_err(|_| "Error in sending http GET request")?;
 
 		let response = pending.wait()
