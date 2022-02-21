@@ -1024,6 +1024,7 @@ impl<T: Config> Pallet<T> {
 		log::info!("[OCW] Sending unpeg request to {}", remote_url_str);
 
 		let post_request = rt_offchain::http::Request::new(&remote_url_str)
+			.method(rt_offchain::http::Method::Post)
 			.body(vec![body])
 			.add_header("Content-Type", "application/json")
 			.add_header("accept", "*/*")

@@ -275,6 +275,8 @@ enum StatementTypes {
 	OutgoingTransactions,
 	/// Bank statement has `incomingTransactions` and `outgoingTransactions` fields populated
 	CompleteTransactions,
+	///
+	InvalidTransactions,
 }
 
 /// Get mock server response

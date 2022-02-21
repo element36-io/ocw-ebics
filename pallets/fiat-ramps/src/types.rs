@@ -266,7 +266,7 @@ pub fn unpeg_request(
 			),
 			(
 				"clearingSystemMemberId".chars().into_iter().collect(),
-				JsonValue::String(vec!['H', 'Y', 'P', 'L'])
+				JsonValue::String(vec!['H', 'Y', 'P', 'L', 'C', 'H', '2', '2'])
 			),
 			(
 				"currency".chars().into_iter().collect(), 
@@ -286,7 +286,7 @@ pub fn unpeg_request(
 			),
 			(
 				"receipientBankName".chars().into_iter().collect(),
-				JsonValue::String(vec!['D', 'E', 'F'])
+				JsonValue::String(vec!['H', 'y', 'p'])
 			),
 			(
 				"receipientCity".chars().into_iter().collect(),
@@ -294,7 +294,7 @@ pub fn unpeg_request(
 			),
 			(
 				"receipientCountry".chars().into_iter().collect(),
-				JsonValue::String(vec!['e'])
+				JsonValue::String(vec!['C', 'H'])
 			),
 			(
 				"receipientName".chars().into_iter().collect(),
@@ -310,7 +310,7 @@ pub fn unpeg_request(
 			),
 			(
 				"receipientStreetNr".chars().into_iter().collect(),
-				JsonValue::String(vec!['e'])
+				JsonValue::String(vec!['2', '5'])
 			),
 			(
 				"receipientZip".chars().into_iter().collect(),

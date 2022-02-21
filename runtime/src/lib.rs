@@ -284,7 +284,7 @@ pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 parameter_types! {
 	// interval in milliseconds between two offchain worker instances
 	// we set it at 5 block times
-	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
+	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 1;
 	pub const UnsignedPriority: u64 = 1000;
 	/// We set decimals for fiat currencies to 2
 	/// (e.g. 1 EUR = 1.00 EUR)
