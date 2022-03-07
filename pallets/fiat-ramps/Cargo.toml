@@ -21,9 +21,11 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, git = 'https://g
 sp-core = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
 sp-io = { version = "4.0.0-dev", default-features = false, git = 'https://github.com/paritytech/substrate.git', tag = 'devhub/latest' }
 
-# for testing
+[dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "devhub/latest" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "devhub/latest" }
+httpmock = "0.6"
+mock-server = { version = "1.0.0", path = "../../mock-server" }
 
 [features]
 default = ['std']
@@ -37,5 +39,7 @@ std = [
 	'log/std',
 	'lite-json/std',
 	'sp-core/std',
-	'sp-keystore'
+	'sp-keystore',
+	'pallet-balances/std',
+	'pallet-timestamp/std'
 ]

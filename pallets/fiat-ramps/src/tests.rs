@@ -1,21 +1,28 @@
-use crate as fiat_ramps;
-use crate::*;
+use crate::{self as fiat_ramps, crypto::Public};
 use codec::Decode;
+use std::sync::Arc;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32},
 };
 use sp_core::{
     offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
     sr25519::Signature,
     H256
 };
+use sp_keystore::{SyncCryptoStore, KeystoreExt};
+use sp_runtime::{ testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}, offchain::DbExternalities, RuntimeAppPublic};
+use httpmock::{
+	MockServer, Method::GET,
+};
+use mock_server::simulate_standalone_server;
 
-use sp_runtime::{ testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}};
-
-use types::{
+use crate::types::{
 	Transaction, IbanAccount, unpeg_request,
-	TransactionType, StrVecBytes
+	TransactionType,
+};
+use crate::helpers::{
+	ResponseTypes, StatementTypes,
+	get_mock_response,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -156,7 +163,91 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
-const TEST_API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1/bankstatements";
+// const TEST_API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1/bankstatements";
+
+const API_URL: &str = "127.0.0.1:8081";
+
+fn test_processing(
+    statement_type: StatementTypes,
+    response_type: ResponseTypes,
+) {
+    let (offchain, state) = testing::TestOffchainExt::new();
+    let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+    let keystore = sp_keystore::testing::KeyStore::new();
+
+    SyncCryptoStore::sr25519_generate_new(
+        &keystore,
+        crate::crypto::Public::ID,
+        Some(&format!("{}/alice", "cup swing hill dinner pioneer mom stick steel sad raven oak practice")),
+    ).unwrap();
+
+    let mut t = new_test_ext(); 
+
+	t.register_extension(OffchainWorkerExt::new(offchain));
+    t.register_extension(TransactionPoolExt::new(pool));
+    t.register_extension(KeystoreExt(Arc::new(keystore)));
+
+	simulate_standalone_server();
+
+	// Mock server
+	let mock_server = MockServer::connect("127.0.0.1:8081");
+	println!("Mock server listening on {}", mock_server.base_url());
+
+
+	let (response_bytes, parsed_response) = get_mock_response(
+		response_type.clone(), 
+		statement_type.clone()
+	);
+
+	// Mock response
+	mock_server.mock(|when, then| {
+		when.method(GET)
+			.path("/ebics/api-v1/bankstatements");
+		then.status(200)
+			.header("content-type", "application/json")
+			.body(response_bytes.clone());
+	});
+
+	let statements_endpoint = format!("{}/ebics/api-v1/bankstatements", mock_server.base_url());
+
+	ebics_server_response(
+		&mut state.write(),
+		&statements_endpoint,
+		Some(response_bytes)
+	);
+
+	t.execute_with(|| {
+		let _res = FiatRampsExample::fetch_transactions_and_send_signed();
+
+        match response_type {
+            ResponseTypes::Empty => {
+                // No transactions should be sent for empty statement
+                assert!(pool_state.read().transactions.is_empty());
+            },
+            ResponseTypes::SingleStatement => {
+                assert!(pool_state.read().transactions.is_empty());
+
+                let tx = pool_state.write().transactions.pop().unwrap();
+                let tx = Extrinsic::decode(&mut &*tx).unwrap();
+                assert_eq!(tx.signature.unwrap().0, 0);
+                assert_eq!(tx.call, Call::FiatRampsExample(crate::Call::process_statements {
+                    statements: parsed_response
+                }));
+            },
+            ResponseTypes::MultipleStatements => {
+                assert!(pool_state.read().transactions.is_empty());
+
+                let tx = pool_state.write().transactions.pop().unwrap();
+                let tx = Extrinsic::decode(&mut &*tx).unwrap();
+
+                assert_eq!(tx.signature.unwrap().0, 0);
+                assert_eq!(tx.call, Call::FiatRampsExample(crate::Call::process_statements {
+                    statements: parsed_response
+                }));
+            },
+        }
+	})
+}
 
 #[test]
 fn it_works() {
@@ -168,286 +259,122 @@ fn it_works() {
 #[test]
 fn should_make_http_call_and_parse() {
 	let (offchain, state) = testing::TestOffchainExt::new();
-	let mut t = new_test_ext();
+	let mut t = new_test_ext(); 
+
+	simulate_standalone_server();
+	
+	let mock_server = MockServer::connect("127.0.0.1:8081");
+
+	println!("Mock server listening on {}", mock_server.base_url());
 
 	t.register_extension(OffchainWorkerExt::new(offchain));
 
-	ebics_server_response(&mut state.write());
+	let (response_bytes, parsed_response) = get_mock_response(
+		ResponseTypes::SingleStatement, 
+		StatementTypes::IncomingTransactions
+	);
+
+	// Mock response
+	mock_server.mock(|when, then| {
+		when.method(GET)
+			.path("/ebics/api-v1/bankstatements");
+		then.status(200)
+			.header("content-type", "application/json")
+			.body(response_bytes.clone());
+	});
+
+	let statements_endpoint = format!("{}/ebics/api-v1/bankstatements", mock_server.base_url());
+
+	ebics_server_response(
+		&mut state.write(),
+		&statements_endpoint,
+		Some(response_bytes)
+	);
 
 	t.execute_with(|| {
-		let response = FiatRampsExample::fetch_json(TEST_API_URL).unwrap();
-		let iban_balances = match FiatRampsExample::extract_iban_balances(response) {
-			Some(iban_balances) => Ok(iban_balances),
-			None => {
-			 	log::error!("Unable to extract iban balance from response");
-				Err("Unable to extract iban balances from response")
-			}
-		}.unwrap();
+		let response = FiatRampsExample::fetch_json(format!("{}/ebics/api-v1", mock_server.base_url()).as_bytes()).unwrap();
+		let raw_array = response.as_array();
+		
+		let statements = match raw_array {
+			Some(v) => {
+				let mut balances: Vec<(IbanAccount, Vec<Transaction>)> = Vec::with_capacity(v.len());
+				for val in v.iter() {
+					// extract iban account
+					let iban_account = match IbanAccount::from_json_value(&val) {
+						Some(account) => account,
+						None => Default::default(),
+					};
 
-		let expected_iban_balances: Vec<IbanBalance> = vec![
-			(b"CH4308307000289537312".to_vec(), 8009702),
-			(b"CH2108307000289537320".to_vec(), 11000)
-		];
-		assert_eq!(expected_iban_balances, iban_balances);
+					// extract transactions
+					let mut transactions = Transaction::parse_transactions(&val, TransactionType::Outgoing).unwrap_or_default();
+					let mut incoming_transactions = Transaction::parse_transactions(&val, TransactionType::Incoming).unwrap_or_default();
+					
+					transactions.append(&mut incoming_transactions);
+					
+					balances.push((iban_account, transactions));
+				}
+				balances
+			},
+			None => Default::default(),
+		};
+
+		assert_eq!(statements.len(), 1);
+		assert_eq!(statements[0].0, parsed_response[0].0);
+		assert_eq!(statements[0].1, parsed_response[0].1);
 	})
 }
 
 #[test]
 fn test_process_empty_statement() {
-
-} 
-
-#[test]
-fn test_process_single_statement() {
-
+    test_processing(
+        StatementTypes::IncomingTransactions,
+        ResponseTypes::Empty,
+    )
 }
 
 #[test]
-fn should_send_unsigned_transaction() {
-	let (offchain, state) = testing::TestOffchainExt::new();
-	let mut t = new_test_ext();
-	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-
-	t.register_extension(OffchainWorkerExt::new(offchain));
-	t.register_extension(TransactionPoolExt::new(pool));
-	ebics_server_response(&mut state.write());
-
-	t.execute_with(|| {
-		let block_number: u64 = FiatRampsExample::next_sync_at();
-		let _res = FiatRampsExample::fetch_iban_balance_and_send_unsigned(block_number);
-		// pop transaction
-		let tx = pool_state.write().transactions.pop().unwrap();
-		assert!(pool_state.read().transactions.is_empty());
-
-		// decode extrinsic
-		let ext = Extrinsic::decode(&mut &*tx).unwrap();
-		
-		// unsigned extrinsic doesn't have signature
-		assert_eq!(ext.signature, None);
-		let expected_iban_balances: Vec<IbanBalance> = vec![
-			(b"CH4308307000289537312".to_vec(), 8009702),
-			(b"CH2108307000289537320".to_vec(), 11000)
-		];
-		// calls match
-		assert_eq!(ext.call, Call::FiatRampsExample(crate::Call::submit_balances_unsigned(block_number, expected_iban_balances)));
-	});
+fn test_process_incoming_transactions() {
+    test_processing(
+        StatementTypes::IncomingTransactions,
+        ResponseTypes::SingleStatement,
+    )
 }
 
 #[test]
-fn should_fail_on_future_blocks() {
-	let (offchain, state) = testing::TestOffchainExt::new();
-	let mut t = new_test_ext();
-	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-
-	t.register_extension(OffchainWorkerExt::new(offchain));
-	t.register_extension(TransactionPoolExt::new(pool));
-
-	t.execute_with(|| {
-		let invalid_block: u64 = FiatRampsExample::next_sync_at() - 1;
-
-		let res1 = FiatRampsExample::fetch_iban_balance_and_send_unsigned(invalid_block);
-
-		// transaction pool is empty
-		assert!(pool_state.read().transactions.is_empty());
-
-		// result of the transaction
-		assert_eq!(&res1, &Err("Too early to send unsigned transaction"));
-	})
+fn test_process_outgoing_transactions() {
+    test_processing(
+        StatementTypes::OutgoingTransactions,
+        ResponseTypes::SingleStatement,
+    )
 }
 
-/// Server response types
-enum ResponseTypes {
-	/// Response is empty
-	Empty,
-	/// Response contains only one statement
-	SingleStatement,
-	/// Response contains multiple statements
-	MultipleStatements,
+#[test]
+fn test_process_multiple_statements() {
+    test_processing(
+        StatementTypes::IncomingTransactions,
+        ResponseTypes::MultipleStatements,
+    )
 }
 
-/// Bank statement types
-enum StatementTypes {
-	/// Bank statement contains no transactions (usual case)
-	Empty,
-	/// Bank statement has `incomingTransactions` field populated
-	IncomingTransactions,
-	/// Bank statement has `outgoingTransactions` field populated
-	OutgoingTransactions,
-	/// Bank statement has `incomingTransactions` and `outgoingTransactions` fields populated
-	CompleteTransactions,
-	///
-	InvalidTransactions,
-}
-
-/// Get mock server response
-fn get_mock_response(
-	response: ResponseTypes,
-	statement: StatementTypes,
-) -> Vec<u8> {
-	match response {
-		ResponseTypes::Empty => {
-			return br#"[]"#.to_vec();
-		}
-		ResponseTypes::SingleStatement => {
-			match statement {
-				StatementTypes::Empty => {
-					return br#"[]"#.to_vec();
-				}
-				StatementTypes::IncomingTransactions => {
-					// the transaction is coming from Bob to Alice
-					return br#"[
-						{
-							"iban": "CH2108307000289537320",
-							"balanceCL": 10000000,
-							"incomingTransactions": [
-								{
-									"iban": "CH4308307000289537312",
-									"name: "Bob",
-									"currency": "EUR",
-									"amount": 10000,
-									"reference": "Purp:5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY; ourRef: none",
-								}
-							],
-							outgoingTransactions: []
-						}
-					]"#.to_vec();
-				}
-				StatementTypes::OutgoingTransactions => {
-					// outgoing transaction is from Bob to Alice
-					return br#"[
-						{
-							"iban": "CH4308307000289537312",
-							"balanceCL": 10000000,
-							"incomingTransactions": [],
-							"outgoingTransactions": [
-								{
-									"iban": "CH2108307000289537320",
-									"name: "Alice",
-									"currency": "EUR",
-									"amount": 10000,
-									"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
-								}
-							]
-						}
-					]"#.to_vec();
-				}
-				StatementTypes::CompleteTransactions => {
-					return br#"[
-						{
-							"iban": "CH1230116000289537313",
-							"balanceCL": 10000000,
-							"incomingTransaction": [
-								{
-									"iban": "CH2108307000289537320",
-									"name: "Alice",
-									"currency": "EUR",
-									"amount": 15000,
-									"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
-								}
-							],
-							"outgoingTransactions": [
-								{
-									"iban": "CH1230116000289537312",
-									"name: "Bob",
-									"currency": "EUR",
-									"amount": 15000,
-									"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
-								}
-							]
-						}	
-					]"#.to_vec();
-				}
-			}
-		},
-		ResponseTypes::MultipleStatements => {
-			return br#"[
-				{
-					"iban": "CH1230116000289537313",
-					"balanceCL": 10000000,
-					"incomingTransaction": [
-						{
-							"iban": "CH2108307000289537320",
-							"name: "Alice",
-							"currency": "EUR",
-							"amount": 15000,
-							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
-						}
-					],
-					"outgoingTransactions": [
-						{
-							"iban": "CH1230116000289537312",
-							"name: "Bob",
-							"currency": "EUR",
-							"amount": 15000,
-							"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
-						}
-					]
-				},
-				{
-					"iban": "CH1230116000289537312",
-					"balanceCL": 10000000,
-					"incomingTransaction": [
-						{
-							"iban": "CH2108307000289537320",
-							"name: "Alice",
-							"currency": "EUR",
-							"amount": 15000,
-							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
-						}
-					],
-					"outgoingTransactions": [
-						{
-							"iban": "CH1230116000289537312",
-							"name: "Bob",
-							"currency": "EUR",
-							"amount": 15000,
-							"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
-						}
-					]
-				},
-				{
-					"iban": "CH1230116000289537313",
-					"balanceCL": 10000000,
-					"incomingTransaction": [
-						{
-							"iban": "CH2108307000289537320",
-							"name: "Alice",
-							"currency": "EUR",
-							"amount": 5000,
-							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
-						},
-						{
-							"iban": "CH1230116000289537312",
-							"name: "Bob",
-							"currency": "EUR",
-							"amount": 10000,
-							"reference": "Purp:5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y; ourRef: none",
-						}
-					],
-					"outgoingTransactions": [
-						{
-							"iban": "CH1230116000289537312",
-							"name: "Bob",
-							"currency": "EUR",
-							"amount": 15000,
-							"reference": "Purp:5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty; ourRef: none",
-						}
-					]
-				}
-			]"#.to_vec();
-		}
-	}
+#[test]
+fn test_process_multiple_statements_outgoing() {
+    test_processing(
+        StatementTypes::OutgoingTransactions,
+        ResponseTypes::MultipleStatements,
+    )
 }
 
 /// Mock server response
 fn ebics_server_response(
-	state: &mut testing::OffchainState
+	state: &mut testing::OffchainState,
+	url: &str,
+	response: Option<Vec<u8>>,
 ) {
 	state.expect_request(testing::PendingRequest {
 		method: "GET".into(),
-		uri: core::str::from_utf8(TEST_API_URL).unwrap().to_string(),
-		response: Some(br#""#.to_vec()),
-		  sent: true,
-		  ..Default::default()
+		uri: url.to_string(),
+		response,
+		sent: true,
+		..Default::default()
 	});
 }

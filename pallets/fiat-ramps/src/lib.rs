@@ -2,7 +2,6 @@
 //! 
 //! Polls Nexus API at a given interval to get the latest bank statement and 
 //! updates the onchain state accordingly.
-
 #![cfg_attr(not(feature = "std"), no_std)]
 use codec::{Decode, Encode};
 use scale_info::{TypeInfo, prelude::format};
@@ -15,6 +14,7 @@ use frame_support::{
 	ensure, PalletId,
 	dispatch::DispatchResultWithPostInfo
 };
+
 use frame_system::{
 	pallet_prelude::*, ensure_signed,
 	offchain::{
@@ -44,8 +44,7 @@ use sp_std::{ convert::{TryFrom}, vec };
 
 use lite_json::{
 	json::{JsonValue}, 
-	json_parser::{parse_json},
-    NumberValue, Serialize,
+    NumberValue, Serialize, parse_json,
 };
 
 use crate::types::{
@@ -56,10 +55,12 @@ use crate::types::{
 #[cfg(feature = "std")]
 use sp_core::{ crypto::Ss58Codec };
 
+pub mod helpers;
 pub mod types;
 
 #[cfg(test)]
 mod tests;
+
 /// Defines application identifier for crypto keys of this module.
 ///
 /// Every module that deals with signatures needs to declare its unique identifier for
@@ -79,7 +80,7 @@ pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 
 /// Hardcoded inital test api endpoint
-const API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1";
+const API_URL: &[u8] = b"http://127.0.0.1:8081/ebics/api-v1";
 
 /// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrapper.
 /// We can utilize the supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
@@ -1112,9 +1113,11 @@ impl<T: Config> Pallet<T> {
 			Ok(v) => v,
 			Err(_e) => "Error parsing json"
 		};
+	
+		log::info!("[OCW] JSON received: {}", json_str);
 
-		let json_val = parse_json(json_str).expect("Invalid json");
-		// runtime_print!("json_val {:?}", json_val);
+		let json_val = parse_json(json_str).expect(json_str);
+
 		Ok(json_val)
 	}
 

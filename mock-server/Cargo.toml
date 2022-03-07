@@ -1,0 +1,12 @@
+[package]
+name = "mock-server"
+version = "1.0.0"
+edition = "2018"
+authors = ['Dastanbek Samatov']
+description = "End-to-end tests for Fiat Ramps protocol"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+lazy_static = "1.4"
+httpmock = "0.6"
+tokio = { version = "1.13", features = ["sync", "macros", "rt-multi-thread", "signal"] }

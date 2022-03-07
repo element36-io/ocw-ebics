@@ -5,9 +5,6 @@ use crate::*;
 /// String vector bytes
 pub type StrVecBytes = Vec<u8>;
 
-/// Iban balance type
-pub type IbanBalance = (StrVecBytes, u64);
-
 pub trait Deserialize<T> {
     fn deserialize(value: &JsonValue) -> Option<T>;
 }
