@@ -225,9 +225,10 @@ fn test_processing(
                 assert!(pool_state.read().transactions.is_empty());
             },
             ResponseTypes::SingleStatement => {
+                let tx = pool_state.write().transactions.pop().unwrap();
+
                 assert!(pool_state.read().transactions.is_empty());
 
-                let tx = pool_state.write().transactions.pop().unwrap();
                 let tx = Extrinsic::decode(&mut &*tx).unwrap();
                 assert_eq!(tx.signature.unwrap().0, 0);
                 assert_eq!(tx.call, Call::FiatRampsExample(crate::Call::process_statements {
@@ -235,11 +236,11 @@ fn test_processing(
                 }));
             },
             ResponseTypes::MultipleStatements => {
+                let tx = pool_state.write().transactions.pop().unwrap();
+
                 assert!(pool_state.read().transactions.is_empty());
 
-                let tx = pool_state.write().transactions.pop().unwrap();
                 let tx = Extrinsic::decode(&mut &*tx).unwrap();
-
                 assert_eq!(tx.signature.unwrap().0, 0);
                 assert_eq!(tx.call, Call::FiatRampsExample(crate::Call::process_statements {
                     statements: parsed_response
