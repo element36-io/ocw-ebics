@@ -1,20 +1,18 @@
-use crate::{self as fiat_ramps, crypto::Public};
 use codec::Decode;
+use frame_support::assert_ok;
 use std::sync::Arc;
-use frame_support::{
-	parameter_types,
-};
 use sp_core::{
     offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
-    sr25519::Signature,
-    H256
 };
 use sp_keystore::{SyncCryptoStore, KeystoreExt};
-use sp_runtime::{ testing::{Header, TestXt}, traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify}, offchain::DbExternalities, RuntimeAppPublic};
+use sp_runtime::{ 
+	RuntimeAppPublic
+};
 use httpmock::{
-	MockServer, Method::GET,
+	MockServer, Method::{GET, POST},
 };
 use mock_server::simulate_standalone_server;
+use lite_json::Serialize;
 
 use crate::types::{
 	Transaction, IbanAccount, unpeg_request,
@@ -25,147 +23,7 @@ use crate::helpers::{
 	get_mock_response,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-/// Balance of an account.
-pub type Balance = u128;
-
-const MILLISECS_PER_BLOCK: u64 = 4000;
-
-//Mock runtime for our tests
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-        FiatRampsExample: fiat_ramps::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Event<T>},
-	}
-);
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
-	pub const BlockHashCount: u64 = 2400;
-
-}
-impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type Origin = Origin;
-	type Call = Call;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = sp_core::sr25519::Public;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<Balance>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-	type OnSetCode = ();
-}
-
-type Extrinsic = TestXt<Call, ()>;
-type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
-
-impl frame_system::offchain::SigningTypes for Test {
-	type Public = <Signature as Verify>::Signer;
-	type Signature = Signature;
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 10;
-	pub const MaxLocks: u32 = 50;
-}
-
-impl pallet_balances::Config for Test {
-	type MaxLocks = MaxLocks;
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
-	/// The type for recording an account's balance.
-	type Balance = Balance;
-	/// The ubiquitous event type.
-	type Event = Event;
-	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = System;
-	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
-}
-
-parameter_types! {
-	pub const MinimumPeriod: u64 = 2;
-}
-
-impl pallet_timestamp::Config for Test {
-	/// A timestamp: milliseconds since the unix epoch.
-	type Moment = u64;
-	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
-	type WeightInfo = ();
-}
-
-parameter_types!{
-	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
-	pub const UnsignedPriority: u64 = 1000;
-	/// We set decimals for fiat currencies to 2
-	/// (e.g. 1 EUR = 1.00 EUR)
-	pub const Decimals: u8 = 2;
-}
-
-impl fiat_ramps::Config for Test {
-	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
-	type Event = Event;
-	type Call = Call;
-	type Currency = Balances;
-	type TimeProvider = Timestamp;
-	type MinimumInterval = MinimumInterval;
-	type UnsignedPriority = UnsignedPriority;
-	type Decimals = Decimals;
-}
-
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
-where
-	Call: From<C>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
-}
-
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test
-where
-	Call: From<LocalCall>,
-{
-	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: <Signature as Verify>::Signer,
-		_account: AccountId,
-		nonce: u64,
-	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
-}
-
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
-}
-
-// const TEST_API_URL: &[u8] = b"http://w.e36.io:8093/ebics/api-v1/bankstatements";
-
-const API_URL: &str = "127.0.0.1:8081";
+use crate::mock::*;
 
 fn test_processing(
     statement_type: StatementTypes,
@@ -224,28 +82,18 @@ fn test_processing(
                 // No transactions should be sent for empty statement
                 assert!(pool_state.read().transactions.is_empty());
             },
-            ResponseTypes::SingleStatement => {
+            ResponseTypes::SingleStatement | ResponseTypes::MultipleStatements => {
                 let tx = pool_state.write().transactions.pop().unwrap();
 
                 assert!(pool_state.read().transactions.is_empty());
 
                 let tx = Extrinsic::decode(&mut &*tx).unwrap();
                 assert_eq!(tx.signature.unwrap().0, 0);
-                assert_eq!(tx.call, Call::FiatRampsExample(crate::Call::process_statements {
-                    statements: parsed_response
-                }));
-            },
-            ResponseTypes::MultipleStatements => {
-                let tx = pool_state.write().transactions.pop().unwrap();
 
-                assert!(pool_state.read().transactions.is_empty());
-
-                let tx = Extrinsic::decode(&mut &*tx).unwrap();
-                assert_eq!(tx.signature.unwrap().0, 0);
                 assert_eq!(tx.call, Call::FiatRampsExample(crate::Call::process_statements {
-                    statements: parsed_response
+                    statements: parsed_response.clone(),
                 }));
-            },
+            }
         }
 	})
 }
@@ -363,6 +211,142 @@ fn test_process_multiple_statements_outgoing() {
         StatementTypes::OutgoingTransactions,
         ResponseTypes::MultipleStatements,
     )
+}
+
+#[test]
+fn test_iban_mapping() {
+	let mut t = new_test_ext();
+
+	let test_accounts = get_test_accounts();
+	
+	let alice = test_accounts[0].clone();
+	let bob = test_accounts[1].clone();
+	let charlie = test_accounts[2].clone();
+
+	let alice_iban = String::from("DE89370400440532013000").as_bytes().to_vec();
+	let bob_iban = String::from("DE89370400440532013001").as_bytes().to_vec();
+	let charlie_iban = String::from("DE89370400440532013002").as_bytes().to_vec();
+
+	t.execute_with(|| {
+		assert_ok!(FiatRampsExample::map_iban_account(
+			Some(alice.clone()).into(),
+			IbanAccount {
+				iban: alice_iban.clone(),
+				balance: 100,
+				last_updated: 0,
+			}
+		));
+		assert_ok!(FiatRampsExample::map_iban_account(
+			Some(bob.clone()).into(),
+			IbanAccount {
+				iban: bob_iban.clone(),
+				balance: 100,
+				last_updated: 0,
+			}
+		));
+
+		assert_ok!(FiatRampsExample::map_iban_account(
+			Some(charlie.clone()).into(),
+			IbanAccount {
+				iban: charlie_iban.clone(),
+				balance: 100,
+				last_updated: 0,
+			}
+		));
+
+		assert_eq!(FiatRampsExample::iban_to_account(alice_iban), alice.clone());
+		assert_eq!(FiatRampsExample::iban_to_account(bob_iban), bob.clone());
+		assert_eq!(FiatRampsExample::iban_to_account(charlie_iban), charlie.clone());
+	})
+}
+
+#[test]
+fn test_burn_request() {
+    let (offchain, state) = testing::TestOffchainExt::new();
+    let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+    let mut t = new_test_ext(); 
+
+	t.register_extension(OffchainWorkerExt::new(offchain));
+    t.register_extension(TransactionPoolExt::new(pool));
+
+	simulate_standalone_server();
+
+	let test_accounts = get_test_accounts();
+
+	let alice = test_accounts[0].clone();
+	let bob = test_accounts[1].clone();
+	// let charlie = test_accounts[2].clone();
+
+	let alice_iban = String::from("DE89370400440532013000").as_bytes().to_vec();
+	let bob_iban = String::from("DE89370400440532013001").as_bytes().to_vec();
+	// let charlie_iban = String::from("DE89370400440532013002").as_bytes().to_vec();
+
+	// Mock server
+	let mock_server = MockServer::connect("127.0.0.1:8081");
+	println!("Mock server listening on {}", mock_server.base_url());
+
+	// let mock_unpeg_request = unpeg_request(
+	// &format!("{:?}", alice),
+	// 	10000,
+	// 	&alice_iban,
+	// 	&"1".to_string(),
+	// )
+	// .serialize();
+
+	// let unpeg_endpoint = format!("{}/ebics/api-v1/unpeg", mock_server.base_url());
+	
+	// // Mock response
+	// mock_server.mock(|when, then| {
+	// 	when.method(POST)
+	// 		.path("/ebics/api-v1/unpeg");
+	// 	then.status(201)
+	// 		.header("content-type", "application/json")
+	// 		.body(mock_unpeg_request.clone());
+	// });
+
+	// ebics_server_response(
+	// 	&mut state.write(),
+	// 	&unpeg_endpoint,
+	// 	Some(mock_unpeg_request.clone()),
+	// );
+
+	t.execute_with(|| {
+		// map Alice iban
+		assert_ok!(FiatRampsExample::map_iban_account(
+			Some(alice.clone()).into(),
+			IbanAccount {
+				iban: alice_iban.clone(),
+				balance: 100,
+				last_updated: 0,
+			}
+		));
+		// map Bob iban
+		assert_ok!(FiatRampsExample::map_iban_account(
+			Some(bob.clone()).into(),
+			IbanAccount {
+				iban: bob_iban.clone(),
+				balance: 100,
+				last_updated: 0,
+			}
+		));
+
+		// call `burn_to_iban` to transfer 10000 from Alice to Bob
+		assert_ok!(FiatRampsExample::burn_to_iban(
+			Some(alice.clone()).into(),
+			10000,
+			bob_iban.clone(),
+		));
+
+		// Check if burn request counter has been increased
+		assert_eq!(FiatRampsExample::burn_request_count(), 1);
+
+		// Check if burn request has been added to the queue
+		let burn_request = FiatRampsExample::burn_request(0);
+		assert_eq!(burn_request.amount, 10000);
+		assert_eq!(burn_request.burner, alice.clone());
+		assert_eq!(burn_request.dest_iban, Some(bob_iban.clone()));
+	})
 }
 
 /// Mock server response

@@ -60,6 +60,8 @@ pub mod types;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod mock;
 
 /// Defines application identifier for crypto keys of this module.
 ///
