@@ -4,6 +4,7 @@ on:
   push:
     branches:
     - main
+    - tests/burn
 
 jobs:
   build-node-template:
@@ -23,8 +24,5 @@ jobs:
           rustup update nightly
           rustup update stable
           rustup target add wasm32-unknown-unknown --toolchain nightly
-      - name: Run ebics service
-        run: |
-          docker run -v $HOME/ebics./root/ebics -p 8093:8093 -d e36io/ebics-service
       - name: Run tests
         run: cargo test
