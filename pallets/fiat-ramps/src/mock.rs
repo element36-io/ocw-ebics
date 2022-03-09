@@ -110,7 +110,7 @@ impl pallet_timestamp::Config for Test {
 }
 
 parameter_types!{
-	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK * 5;
+	pub const MinimumInterval: u64 = MILLISECS_PER_BLOCK;
 	pub const UnsignedPriority: u64 = 1000;
 	/// We set decimals for fiat currencies to 2
 	/// (e.g. 1 EUR = 1.00 EUR)

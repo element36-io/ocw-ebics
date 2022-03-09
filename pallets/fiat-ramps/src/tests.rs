@@ -6,7 +6,7 @@ use sp_core::{
 };
 use sp_keystore::{SyncCryptoStore, KeystoreExt};
 use sp_runtime::{ 
-	RuntimeAppPublic
+	RuntimeAppPublic, offchain::http::PendingRequest
 };
 use httpmock::{
 	MockServer, Method::{GET, POST},
@@ -14,10 +14,10 @@ use httpmock::{
 use mock_server::simulate_standalone_server;
 use lite_json::Serialize;
 
-use crate::types::{
+use crate::{types::{
 	Transaction, IbanAccount, unpeg_request,
 	TransactionType,
-};
+}, BurnRequestStatus};
 use crate::helpers::{
 	ResponseTypes, StatementTypes,
 	get_mock_response,
@@ -68,10 +68,14 @@ fn test_processing(
 
 	let statements_endpoint = format!("{}/ebics/api-v1/bankstatements", mock_server.base_url());
 
-	ebics_server_response(
-		&mut state.write(),
-		&statements_endpoint,
-		Some(response_bytes)
+	ebics_server_response(&mut state.write(),
+		testing::PendingRequest {
+			method: "GET".to_string(),
+			uri: statements_endpoint,
+			response: Some(response_bytes),
+			sent: true,
+			..Default::default()
+		}
 	);
 
 	t.execute_with(|| {
@@ -134,10 +138,14 @@ fn should_make_http_call_and_parse() {
 
 	let statements_endpoint = format!("{}/ebics/api-v1/bankstatements", mock_server.base_url());
 
-	ebics_server_response(
-		&mut state.write(),
-		&statements_endpoint,
-		Some(response_bytes)
+	ebics_server_response(&mut state.write(),
+		testing::PendingRequest {
+			method: "GET".to_string(),
+			uri: statements_endpoint,
+			response: Some(response_bytes),
+			sent: true,
+			..Default::default()
+		}
 	);
 
 	t.execute_with(|| {
@@ -264,11 +272,19 @@ fn test_iban_mapping() {
 fn test_burn_request() {
     let (offchain, state) = testing::TestOffchainExt::new();
     let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+    let keystore = sp_keystore::testing::KeyStore::new();
+
+	SyncCryptoStore::sr25519_generate_new(
+        &keystore,
+        crate::crypto::Public::ID,
+        Some(&format!("{}/alice", "cup swing hill dinner pioneer mom stick steel sad raven oak practice")),
+    ).unwrap();
 
     let mut t = new_test_ext(); 
 
 	t.register_extension(OffchainWorkerExt::new(offchain));
     t.register_extension(TransactionPoolExt::new(pool));
+    t.register_extension(KeystoreExt(Arc::new(keystore)));
 
 	simulate_standalone_server();
 
@@ -282,34 +298,30 @@ fn test_burn_request() {
 	let bob_iban = String::from("DE89370400440532013001").as_bytes().to_vec();
 	// let charlie_iban = String::from("DE89370400440532013002").as_bytes().to_vec();
 
-	// Mock server
-	let mock_server = MockServer::connect("127.0.0.1:8081");
-	println!("Mock server listening on {}", mock_server.base_url());
+	let mock_unpeg_request = unpeg_request(
+	&format!("{:?}", bob),
+		10000,
+		&bob_iban,
+		&"0".to_string(),
+	)
+	.serialize();
 
-	// let mock_unpeg_request = unpeg_request(
-	// &format!("{:?}", alice),
-	// 	10000,
-	// 	&alice_iban,
-	// 	&"1".to_string(),
-	// )
-	// .serialize();
+	let unpeg_endpoint = "http://127.0.0.1:8081/ebics/api-v1/unpeg";
 
-	// let unpeg_endpoint = format!("{}/ebics/api-v1/unpeg", mock_server.base_url());
-	
-	// // Mock response
-	// mock_server.mock(|when, then| {
-	// 	when.method(POST)
-	// 		.path("/ebics/api-v1/unpeg");
-	// 	then.status(201)
-	// 		.header("content-type", "application/json")
-	// 		.body(mock_unpeg_request.clone());
-	// });
-
-	// ebics_server_response(
-	// 	&mut state.write(),
-	// 	&unpeg_endpoint,
-	// 	Some(mock_unpeg_request.clone()),
-	// );
+	ebics_server_response(&mut state.write(),
+		testing::PendingRequest {
+			uri: unpeg_endpoint.to_string(),
+			method: "POST".to_string(),
+			body: mock_unpeg_request.clone(),
+			response: Some(mock_unpeg_request),
+			headers: [
+				("Content-Type".to_string(), "application/json".to_string()), 
+				("accept".to_string(), "*/*".to_string())
+			].to_vec(),
+			sent: true,
+			..Default::default()
+		}
+	);
 
 	t.execute_with(|| {
 		// map Alice iban
@@ -346,20 +358,19 @@ fn test_burn_request() {
 		assert_eq!(burn_request.amount, 10000);
 		assert_eq!(burn_request.burner, alice.clone());
 		assert_eq!(burn_request.dest_iban, Some(bob_iban.clone()));
+
+		assert_ok!(FiatRampsExample::process_burn_requests());
+
+		// Check if burn request's status has been updated
+		let burn_request = FiatRampsExample::burn_request(0);
+		assert_eq!(burn_request.status, BurnRequestStatus::Sent);
 	})
 }
 
 /// Mock server response
 fn ebics_server_response(
 	state: &mut testing::OffchainState,
-	url: &str,
-	response: Option<Vec<u8>>,
+	pending_request: testing::PendingRequest
 ) {
-	state.expect_request(testing::PendingRequest {
-		method: "GET".into(),
-		uri: url.to_string(),
-		response,
-		sent: true,
-		..Default::default()
-	});
+	state.expect_request(pending_request);
 }
