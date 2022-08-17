@@ -21,5 +21,6 @@
      "label": "Open PolkadotJS Apps",
      "type": "external-preview",
      "args": ["https://polkadot.js.org/apps/?rpc=wss%3A%2F%2F/$HOST/wss"]}
-  ]
+],
+"dockerFile": "../Dockerfile"
 }

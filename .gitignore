@@ -15,3 +15,5 @@
 # direnv cache
 .direnv
 yarn-error.log
+.devcontainer/devcontainer.json
+.devcontainer/devcontainer.json
