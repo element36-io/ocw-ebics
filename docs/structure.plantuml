@@ -34,8 +34,72 @@ entity Transaction {
 	pub tx_type: TransactionType
 }
 
-entity OCW-Instance {
+entity Pallet {
+	/// Hardcoded inital test api endpoint
+	const API_URL: &[u8; 33] = b"http://w.e36.io:8093/ebics/api-v1";
+
+	/// URL of the API endpoint
+	#[pallet::storage]
+	type ApiUrl<T: Config> = StorageValue<Value = [u8; 33], 
+		QueryKind = ValueQuery, OnEmpty = DefaultApi<T>>;
+	
+	/// Counts the number of burn requests, irrespective of the sender and burn request status
+	#[pallet::storage]
+	type BurnRequestCount<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+	/// Mapping between IBAN to AccountId
+	#[pallet::storage]
+	type IbanToAccount<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Iban,
+		ValueQuery,
+	>;
+
+	/// Stores burn requests
+	/// until they are confirmed by the bank as outgoing transaction
+	/// transaction_id -> burn_request
+	#[pallet::storage]
+	 type BurnRequests<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		u64,
+		BurnRequest<BalanceOf<T>>,
+		ValueQuery
+	>;	
+
+	/// Add new `IbanAccount` to the store                                                                                        
+	/// `iban`: IbanAccount struct
+	pub fn map_iban_account()
+
+	pub fn unmap_iban_account(
+			origin: OriginFor<T>,
+			iban: Iban,
+		) -> DispatchResultWithPostInfo
+
+}
+
+entity Runtime {
+	
+	/// An index to a block.
+	pub type BlockNumber = u32;
+
+	/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
+	pub type Signature = MultiSignature;
+
+	/// Some way of identifying an account on the chain. We intentionally make it equivalent
+	/// to the public key of our transaction signing scheme.
+	pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
+
+	/// Balance of an account.
+	pub type Balance = u128;
+
+	/// Index of a transaction in the chain.
+	pub type Index = u32;
     
 }
+
+
 @enduml
 
