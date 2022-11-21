@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>Invest</title>
+    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="apfelhof.css" />
+        <style>
+      body {
+        background-image: url('img/coffee.jpg');
+       
+  background-position: center; /* Center the image */
+  background-repeat: no-repeat; /* Do not repeat the image */
+  background-size: cover; 
+      }
+      </style>
+  </head>
+  <body>
+       
+      <div class="container">
+        <div id="form-wrapper">
+          <h1 style="color: white;text-align: center;">Buy me a coffee
+          
+          <button type="button" class="btn-ping button button-full button-invest margin-10" style="width:300px;margin-left: 50px;" onclick="doinvest()">
+              get payment infos
+          </button>demo
+          </h1>
+          
+          <div  class="paper " id="bankslip" style=" opacity: 0.85;" ></div>
+        
+          <div class="paper"  id="explainer2" style="display:none">
+            <section class="example" style=" opacity: 0.5; ">
+              <div class="example__section paper " style="max-width: 800px; max-height:150px;">
+                <h3>Payment is simulated.</h3>
+                
+                <div id="bank-details" >
+                    Log into demo.e36.io with demo@element36.io password Element36.io. 
+                    The platform will pick up the payment and mint a stablecoin for the Demo-User.
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div style="visibility: hidden">
+            <section class="example" style=" opacity: 0.5; display:none;" id="bankdetails">
+              <div class="example__section paper " style="max-width: 800px;">
+                <h3>Bank details for the wire-transfer:</h3>
+                
+                <div id="bank-details" >
+                To (recipient name): <div id="receipientName"></div>, Recipient IBAN: <div id="receipientIban" >...</div>
+                <br>Recipient address: <div id="receipientAddress" >...</div>
+                <br>
+                Bank (recipient bank): <div id="bankName">...</div>, BIC: <div id="bankBic" >...</div>
+                <br>Bank address: <div id="bankAddress" >...</div>, country: <div id="bankCountry" >...</div>
+                <br>
+                REFERENCE-ID/CODE: <div id="paymentReferenceId">...</div>
+                <br>
+                Amount: <div id="amount">...</div> <div id="currency"></div>
+              </div>
+            </section>
+          </div>
+
+
+        </div>
+      </div>
+
+  </body>
+
+  <script src="./walletfree.js"></script>
+  <script src="./coffee.js"></script>
+</html>

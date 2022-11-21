@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>Connection Aragon contracts to payment network</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__content">
+        <h1>   
+          <img  src="./img/aragon2.png" class="hero__img" />
+          QR-Code to Smart Contract<br> ... and back again!
+        </h1>
+      </div>
+    </header>
+    <div class="container">
+      <section class="hero">
+        <p class="__paragraph">
+          Here we want to show that you can connect <strong>ANY SMART CONTRACT</strong> to the banking network with element36. 
+          As example use the <strong>QR-Invoice</strong> (ISO 20022 standard) and the the popular 
+          <a href="https://aragon.org" target="_blank" >Aragon</a> platform, where anone can create Smart Contracts to create decentralized organizations, issue tokens, manage funding or own funds. 
+        </p>
+        <p class="__paragraph">
+        <OL >
+            <LI>Click button</LI>
+            <LI>Onboard &amp; KYC yourself if not done yet</LI>
+            <LI>Funds will be sent to Aragon Smart Contract</LI>
+            <LI>(Smart Contract may trigger wire-transfers to your registered bank account)</LI>
+        </OL>
+        </p>
+        <p class="__paragraph">
+          Give it a try! ... or check out the source on <a href="https://github.com/element36-io/cash36-examples" target="_blank">github</a>. 
+        </p>
+
+      </section>
+      <section class="example">
+        <div class="example__section paper">
+            <h3>Testnetwork</h3>
+            Simulated payments &amp; KYC on rinkeby network.
+ 
+            <p class="__paragraph">
+               Clicking "simulate" will simulate the wire-transfer of the payment-slip below. Monitor the blockchain transaction on 
+                <a href="https://rinkeby.etherscan.io/address/0xb62d5cfe67b69f9bf045a2f7ef923a384d533154#tokentxns" target="_blank">etherscan</a> or watch the changing balance on the sample
+                <a href="https://rinkeby.aragon.org/?#/fibreetest/0xb62d5cfe67b69f9bf045a2f7ef923a384d533154/" target="_blank">Aragon contract</a> when the transactions get processed. 
+            </p>
+        
+            <p class="__paragraph">
+              You may log into <a href="https://demo.e36.io" target="_blank">demo.e36.io</a> with the demo-user used in the simulation: <UL><LI>user: demo@element36.io</LI> <LI>password: Element36.io </LI></UL>
+          </p>
+
+            <button type="button" class="btn-ping button button-full" onclick="simulatePayment();">
+              Simulate payment
+            </button>
+        </div>
+        <div class="example__section paper">
+            <h3>Smart Contracts with real money</h3>
+            <div>
+              An Aragon contract on mainnet using real (live) payments and KYC.
+            </div>
+            <p class="__paragraph">
+                Donate minimum 5 EUR to us :) <br> 
+                After the payment you NEED TO DO FULL KYC on <a href="https://cash36.io">cash36.io</a> or upload data via our 
+                <a href="https://github.com/element36-io/cash36-frontend/blob/master/doc/src/singlepage.md" target="_blank">API</a>. 
+                If identification is successful, your payment will converted to our stablecoin and sent to the contract. 
+                Check funds on <a href="https://mainnet.aragon.org/?#/fibreefunding/0x9477bb6b58fb3e08ad08ba30c8116ac3ac728ee9/" target="_blank">Aragon</a> 
+                or 
+                <a href="https://etherscan.io/address/0x9477bb6b58fb3e08ad08ba30c8116ac3ac728ee9" target="_blank">etherscan</a>.
+                Based on the transaction-hash, the contracts can send back funds to you.
+            </p>
+
+            <button type="button" class="btn-ping button button-full" onclick="doRealPayment()" >
+            Buy me a coffee 
+            </button>
+        </div>
+      </section>
+      <section class="example">
+        <div  class="paper " id="bankslip"><br><br>&nbsp;&nbsp;&nbsp;QR-Code for the wire transfer will appear here after clicking the button. &nbsp;&nbsp;&nbsp;<br><br></div>
+      </section>
+     
+
+    <section class="example">
+        <div>
+          You may create your own <a href="https://aragon.org" target="_blank">Aragon Contracts</a> and clone  <a href="https://github.com/element36-io">our github project</a> to create your own UI. 
+        <a href="https://element36.io" target="_blank">Contact us</a> if you want to know more, need help or if you want to create your own Stablecoins for your Dapp. 
+        Apply for the zero fee partner program <a href="https://docs.google.com/forms/d/e/1FAIpQLScD3GA20z6Ny2c8AYaO8vbAFZZQt8XvL9RIvsjKfTlL5r5Nzw/viewform?usp=sf_link" target="_blank">here</a>
+        </div>
+    </section>
+
+    <section class="example" style=" opacity: 0.5; display:none;" id="bankdetails">
+      <div class="example__section paper " style="max-width: 800px;">
+        <h3>Bank details for the wire-transfer:</h3>
+        
+        <div id="bank-details" >
+        To (recipient name): <div id="receipientName"></div>, Recipient IBAN: <div id="receipientIban" >...</div>
+        <br>Recipient address: <div id="receipientAddress" >...</div>
+        <br>
+        Bank (recipient bank): <div id="bankName">...</div>, BIC: <div id="bankBic" >...</div>
+        <br>Bank address: <div id="bankAddress" >...</div>, country: <div id="bankCountry" >...</div>
+        <br>
+        REFERENCE-ID/CODE: <div id="paymentReferenceId">...</div>
+        <br>
+        Amount: <div id="amount">...</div> <div id="currency"></div>
+      </div>
+    </div>
+
+  </section>
+  </div>
+  </body>
+
+  <script src="./walletfree.js"></script>
+</html>

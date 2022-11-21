@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>Invest</title>
+    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="apfelhof.css" />
+  </head>
+  <body>
+  
+    <div class="container">
+      <div id="form-wrapper">
+        <form name="invest">
+          <div class="margin-10" > Investment in Euro:
+          
+          <select id="amount-slider">
+            <option class="checkbox-budget" type="radio" name="amount" id="1" value="other" required> Betrag auswählen oder eingeben </option>
+            <option class="checkbox-budget" type="radio" name="amount" id="1" value="500" required> 500,-- </option>
+            <option class="checkbox-budget" type="radio" name="amount" id="2" value="1000" required> 1.000,--</option>
+            <option class="checkbox-budget" type="radio" name="amount" id="3" value="5000" required> 5.000,--</option>
+            <option class="checkbox-budget" type="radio" name="amount" id="4" value="10000" required> 10.000,--</option>
+          </select>
+        </div>
+          <div id="amount-other" class="margin-10">
+            oder Betrag in EUR eingeben: <input type="text" name="amountOther" id="amountOther"  > 
+          </div>
+          <button type="button" class="btn-ping button button-full button-invest margin-10" onclick="doinvest()">
+              Zahlschein anzeigen
+          </button>
+        </form>
+      </div>
+
+      <div  class="paper " id="bankslip"><br><br>&nbsp;&nbsp;&nbsp;QR-Code for the wire transfer will appear here after clicking the button. &nbsp;&nbsp;&nbsp;<br><br></div>
+
+
+    <section class="example" style=" opacity: 0.5; display:none;" id="bankdetails">
+      <div class="example__section paper " style="max-width: 800px;">
+        <h3>Bank details for the wire-transfer:</h3>
+        
+        <div id="bank-details" >
+        To (recipient name): <div id="receipientName"></div>, Recipient IBAN: <div id="receipientIban" >...</div>
+        <br>Recipient address: <div id="receipientAddress" >...</div>
+        <br>
+        Bank (recipient bank): <div id="bankName">...</div>, BIC: <div id="bankBic" >...</div>
+        <br>Bank address: <div id="bankAddress" >...</div>, country: <div id="bankCountry" >...</div>
+        <br>
+        REFERENCE-ID/CODE: <div id="paymentReferenceId">...</div>
+        <br>
+        Amount: <div id="amount">...</div> <div id="currency"></div>
+      </div>
+    </div>
+
+  </section>
+  </div>
+  </body>
+
+  <script src="./walletfree.js"></script>
+  <script src="./apfelhof.js"></script>
+</html>

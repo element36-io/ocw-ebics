@@ -1,0 +1,228 @@
+:root {
+  --dark: #32325d;
+  --gray-400: #cbd5e0;
+  --gray-500: #a0aec0;
+  --errorRed: #cd3d64;
+  --textGray: #525f7f;
+  --borderGray: rgb(230, 235, 241);
+  --background: #fcfcfc;
+  --header: #f7f8fb;
+  --button: linear-gradient(to left bottom, #208fea, #6bafe6);
+  --maxwidth: 875px;
+
+  --borderRadius: 4px;
+  --shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-paper: 0 5px 6px 0 rgba(0, 0, 0, 0.05);
+  --shadowInput: rgba(50, 50, 93, 0.25) 0px 2px 5px -1px,
+    rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;
+}
+
+/* BASIC RESET */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  box-sizing: border-box;
+  font-family: sans-serif;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  height: 100%;
+  font-size: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: normal;
+  word-wrap: break-word;
+  font-kerning: normal;
+  -moz-font-feature-settings: 'kern', 'liga', 'clig', 'calt';
+  -ms-font-feature-settings: 'kern', 'liga', 'clig', 'calt';
+  -webkit-font-feature-settings: 'kern', 'liga', 'clig', 'calt';
+  font-feature-settings: 'kern', 'liga', 'clig', 'calt';
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: var(--dark);
+  background: var(--background);
+  line-height: 1.5;
+  padding-bottom: 60px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+}
+
+ol,
+ul {
+  margin: 0;
+  padding: 0;
+  padding-left: 3em;
+  font-weight: normal;
+}
+
+h1 {
+  font-weight: bold;
+  font-size: 32px;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+h3 {
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+/* PAPER */
+.paper {
+  background: #fff;
+  box-shadow: var(--shadow-paper);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* BUTTONS */
+
+.button {
+  border-radius: var(--borderRadius);
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: 0.025em;
+  line-height: 40px;
+  padding: 0 6px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--dark);
+  min-width: 100px;
+}
+
+.button-full {
+  background: var(--button);
+  color: #fff;
+  box-shadow: var(--shadow);
+  width: 100%;
+}
+
+/* INPUTS */
+
+.input {
+  font-size: 16px;
+  border: none;
+  outline: none;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--borderGray);
+  color: var(--dark);
+}
+
+/* CONTAINER */
+
+.container {
+  max-width: var(--maxwidth);
+  margin: 0 auto;
+  padding:0.5em;
+}
+
+/* HEADER */
+
+.header {
+  background: var(--header);
+  color: var(--textGray);
+  padding: 8px;
+  margin-bottom: 1em;
+  vertical-align: center;
+}
+
+.header__content {
+  max-width: var(--maxwidth);
+  margin: 0 auto;
+  height:6em;
+
+}
+
+/* HERO */
+
+.hero {
+  padding: 32px 0;
+}
+
+.hero__title {
+  margin-bottom: 2em;
+}
+
+.hero__img {
+  float:left;
+  margin-right: 2em;
+}
+
+.__paragraph {
+  margin-top: 1em;
+}
+
+/*  Bank Details */
+
+#bank-details { 
+  color:rgb(42, 42, 42);
+}
+#bank-details div {
+  display:inline;
+  font-weight: bold;
+  color:var(--textGray);
+}
+
+div#paymentReferenceId { 
+  color:red;
+}
+
+/* PING PONG */
+
+.example {
+  /*display: flex;*/
+  margin-bottom: 16px;
+}
+
+.example__section {
+  height: 400px;
+  margin-right: 16px;
+  display: inline-flex;
+  padding: 16px;
+  flex-direction: column;
+  max-width: 400px;
+}
+
+.example__section > button {
+  margin-top: auto;
+}
+
+.example__section > input {
+  margin: 8px 0;
+}
