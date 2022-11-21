@@ -9,7 +9,7 @@ function doinvest() {
             var json = JSON.parse(xhr.responseText);
             showPaymentInfo(json);
         }
-    };
+    };/ebics/api-v1/createOrder
 
     var amount=5;
 
@@ -22,3 +22,32 @@ function doinvest() {
     });
     xhr.send(data);
 }
+
+/*
+
+
+/ebics/api-v1/createOrder
+
+
+{
+  "amount": 1.1,
+  "clearingSystemMemberId": "HYPLCH22XXX",
+  "currency": "EUR",
+  "msgId": "emtpy",
+  "nationalPayment": true,
+  "ourReference": "empty",
+  "pmtInfId": "empty",
+  "purpose": "0x9A0cab4250613cb8437F06ecdEc64F4644Df4D87",
+  "receipientBankName": "Hypi Lenzburg AG",
+  "receipientCity": "Baar",
+  "receipientCountry": "CH",
+  "receipientIban": "CH1230116000289537313",
+  "receipientName": "element36 AG",
+  "receipientStreet": "Bahnmatt",
+  "receipientStreetNr": "25",
+  "receipientZip": "6340",
+  "sourceBic": "HYPLCH22XXX",
+  "sourceIban": "CH2108307000289537320"
+}
+
+*/
