@@ -25,6 +25,9 @@ function doinvest() {
 
 /*
 
+http://localhost:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/ebics-controller/createPaymentOrderUsingPOST
+
+http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/ebics-controller/createPaymentOrderUsingPOST
 
 /ebics/api-v1/createOrder
 
