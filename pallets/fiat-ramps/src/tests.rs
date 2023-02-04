@@ -16,6 +16,7 @@ use crate::{
 
 use crate::mock::*;
 
+/// Utility function to test various scenarios for the `process_statements` extrinsic
 fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes) {
 	let (offchain, state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();

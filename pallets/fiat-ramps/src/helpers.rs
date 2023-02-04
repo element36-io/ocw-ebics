@@ -41,18 +41,9 @@ pub(crate) fn get_mock_response<T: Config>(
 	response: ResponseTypes,
 	statement: StatementTypes,
 ) -> (Vec<u8>, Vec<(BankAccountOf<T>, Vec<TransactionOf<T>>)>) {
-	let alice_iban: IbanOf<T> = b"CH2108307000289537320"
-		.to_vec()
-		.try_into()
-		.expect("Failed to convert string to bytes");
-	let bob_iban: IbanOf<T> = b"CH1230116000289537312"
-		.to_vec()
-		.try_into()
-		.expect("Failed to convert string to bytes");
-	let charlie_iban: IbanOf<T> = b"CH1230116000289537313"
-		.to_vec()
-		.try_into()
-		.expect("Failed to convert string to bytes");
+	let alice_iban = string_to_bounded_vec::<T::MaxIbanLength>("CH2108307000289537320");
+	let bob_iban = string_to_bounded_vec::<T::MaxIbanLength>("CH1230116000289537312");
+	let charlie_iban = string_to_bounded_vec::<T::MaxIbanLength>("CH2108307000289537313");
 
 	match response {
 		ResponseTypes::Empty => {
