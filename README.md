@@ -39,7 +39,6 @@ docker run -p 8093:8093 e36io/ebics-service
 ```
 There are some known issues with running the backend on M1 Silicon chips, so use our server if that's the case.
 
-
 Now start the OCW. The provided `cargo run` command will launch a temporary node and its state will be discarded after
 you terminate the process. After the project has been built, there are other ways to launch the
 node.

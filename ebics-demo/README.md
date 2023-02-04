@@ -9,20 +9,7 @@ The template is built with [Create React App](https://github.com/facebook/create
 and [Polkadot js API](https://polkadot.js.org/docs/api/). Familiarity with these tools
 will be helpful, but the template strives to be self-explanatory.
 
-## Using The Template
-
-### Installation
-
-The codebase is installed using [git](https://git-scm.com/) and [yarn](https://yarnpkg.com/). This tutorial assumes you have installed yarn globally prior to installing it within the subdirectories. For the most recent version and how to install yarn, please refer to [Yarn](https://yarnpkg.com/) documentation and installation guides.
-
-```bash
-# Clone the repository
-git clone https://github.com/substrate-developer-hub/substrate-front-end-template.git
-cd substrate-front-end-template
-yarn install
-```
-
-### Usage
+## Usage
 
 You can start the template in development mode to connect to a locally running node
 
@@ -37,18 +24,6 @@ yarn build
 ```
 
 and open `build/index.html` in your favorite browser.
-
-### Try the Hosted Version
-
-Connecting to Polkadot:<br/>
-https://substrate-developer-hub.github.io/substrate-front-end-template?rpc=wss://rpc.polkadot.io
-
-Connecting to your local Substrate node (Chrome and Firefox only):<br/>
-https://substrate-developer-hub.github.io/substrate-front-end-template?rpc=ws://localhost:9944
-
-Connecting to the development Substrate node `wss://dev-node.substrate.dev`:<br/>
-https://substrate-developer-hub.github.io/substrate-front-end-template
-
 
 ## Configuration
 
