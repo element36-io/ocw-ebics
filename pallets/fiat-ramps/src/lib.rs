@@ -64,12 +64,11 @@ pub mod pallet {
 
 	/// This is the pallet's trait
 	#[pallet::config]
-	pub trait Config: frame_system::Config + CreateSignedTransaction<Call<Self>> {
+	pub trait Config:
+		frame_system::Config + CreateSignedTransaction<Call<Self>> + pallet_sudo::Config
+	{
 		/// The identifier type for an offchain SendSignedTransaction
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
-
-		/// The overarching dispatch call type.
-		type RuntimeCall: From<Call<Self>>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -321,11 +320,11 @@ pub mod pallet {
 		/// 	`Vec<Transaction>`: List of transactions to process
 		#[pallet::weight(100_000_000)]
 		pub fn process_statements(
-			origin: OriginFor<T>,
+			_origin: OriginFor<T>,
 			statements: Vec<(BankAccountOf<T>, Vec<TransactionOf<T>>)>,
 		) -> DispatchResultWithPostInfo {
 			// this can be called only by the sudo account
-			ensure_root(origin)?;
+			// ensure_root(origin)?;
 
 			log::info!("[OCW] Processing statements");
 

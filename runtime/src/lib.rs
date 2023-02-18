@@ -300,7 +300,6 @@ parameter_types! {
 impl fiat_ramps::Config for Runtime {
 	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type TimeProvider = Timestamp;
 	type MinimumInterval = MinimumInterval;

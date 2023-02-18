@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Icon, Grid } from 'semantic-ui-react'
+import { Card, Grid, Icon } from 'semantic-ui-react'
 
 import { useSubstrateState } from './substrate-lib'
 
@@ -25,6 +25,7 @@ function Main(props) {
 
   return (
     <Grid.Column>
+      <h1>Stuff</h1>
       <Card>
         <Card.Content>
           <Card.Header>{nodeInfo.nodeName}</Card.Header>
