@@ -56,17 +56,17 @@ function Main() {
         <AccountSelector />
       </Sticky>
       <Container>
-        <Grid stackable columns="equal">
+        <Grid centered stackable columns="equal">
           <Grid.Row>
             <TemplateModule />
           </Grid.Row>
           <Grid.Row>
             <Transfer />
           </Grid.Row>
-          <Grid.Row stretched>
+          <Grid.Row>
             <NodeInfo />
           </Grid.Row>
-          <Grid.Row stretched>
+          <Grid.Row>
             <Balances />
           </Grid.Row>
           <Grid.Row>

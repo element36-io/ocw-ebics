@@ -1,16 +1,23 @@
 import React, { useState } from 'react'
-import { Form, Input, Grid, Label, Icon, Dropdown } from 'semantic-ui-react'
-import { TxButton } from './substrate-lib/components'
+import { Dropdown, Form, Grid, Icon, Input, Label } from 'semantic-ui-react'
 import { useSubstrateState } from './substrate-lib'
+import { TxButton } from './substrate-lib/components'
+
+// Destination options for transfer
+const destinationOptions = [
+  "IBAN",
+  "Address",
+  "Burn"
+]
 
 export default function Main(props) {
   const [status, setStatus] = useState(null)
-  const [formState, setFormState] = useState({ addressTo: '', amount: 0 })
+  const [formState, setFormState] = useState({ addressTo: '', ibanTo: '', amount: 0, destination: destinationOptions[0] })
 
   const onChange = (_, data) =>
     setFormState(prev => ({ ...prev, [data.state]: data.value }))
 
-  const { addressTo, amount } = formState
+  const { addressTo, amount, ibanTo, destination } = formState
 
   const { keyring } = useSubstrateState()
   const accounts = keyring.getPairs()
@@ -25,8 +32,8 @@ export default function Main(props) {
   })
 
   return (
-    <Grid.Column width={8}>
-      <h1>Transfer</h1>
+    <Grid.Column width={8} textAlign="center">
+      <h1>Transfer via extrinsic</h1>
       <Form>
         <Form.Field>
           <Label basic color="teal">
@@ -44,26 +51,58 @@ export default function Main(props) {
 
         <Form.Field>
           <Dropdown
-            placeholder="Select from available addresses"
+            placeholder="Transfer destination type"
             fluid
             selection
+            labeled
             search
-            options={availableAccounts}
-            state="addressTo"
+            options={destinationOptions.map((option) => {
+              return {
+                key: option,
+                text: option,
+                value: option,
+              }
+            })}
+            text={`Transfer destination type: ${destination}`}
+            state="destination"
             onChange={onChange}
           />
+          {destination === "Address" &&
+            <Dropdown
+              placeholder="Select from available addresses"
+              fluid
+              selection
+              search
+              options={availableAccounts}
+              state="addressTo"
+              onChange={onChange}
+            />
+          }
         </Form.Field>
 
         <Form.Field>
-          <Input
-            fluid
-            label="To"
-            type="text"
-            placeholder="address"
-            value={addressTo}
-            state="addressTo"
-            onChange={onChange}
-          />
+          {destination === "Address" &&
+            <Input
+              fluid
+              label="To Address"
+              type="text"
+              placeholder="address"
+              value={addressTo}
+              state="addressTo"
+              onChange={onChange}
+            />
+          }
+          {destination === "IBAN" &&
+            <Input
+              fluid
+              label="To IBAN"
+              type="text"
+              placeholder="iban"
+              value={ibanTo}
+              state="ibanTo"
+              onChange={onChange}
+            />
+          }
         </Form.Field>
         <Form.Field>
           <Input
