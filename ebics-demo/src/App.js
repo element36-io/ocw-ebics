@@ -14,7 +14,7 @@ import Events from './Events'
 import Interactor from './Interactor'
 import NodeInfo from './NodeInfo'
 import TemplateModule from './TemplateModule'
-import Transfer from './Transfer'
+import Transfer from './TransferTx'
 
 function Main() {
   const { apiState, apiError, keyringState } = useSubstrateState()

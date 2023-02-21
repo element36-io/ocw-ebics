@@ -50,7 +50,7 @@ function Main(props) {
               No account associated with your address:
                 <br/>
                 <br/>
-              <b>{currentAccount.address}</b>
+              <b>{currentAccount?.address}</b>
             </Card.Content>
           </Card>
           <Form>
