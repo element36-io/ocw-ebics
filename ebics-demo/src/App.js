@@ -10,11 +10,8 @@ import { DeveloperConsole } from './substrate-lib/components'
 
 import AccountSelector from './AccountSelector'
 import Balances from './Balances'
-import Events from './Events'
-import Interactor from './Interactor'
-import NodeInfo from './NodeInfo'
-import TemplateModule from './TemplateModule'
-import Transfer from './TransferTx'
+import FiatRampsModule from './FiatRampsModule'
+import TransferTx from './TransferTx'
 
 function Main() {
   const { apiState, apiError, keyringState } = useSubstrateState()
@@ -58,20 +55,13 @@ function Main() {
       <Container>
         <Grid centered stackable columns="equal">
           <Grid.Row>
-            <TemplateModule />
+            <FiatRampsModule />
           </Grid.Row>
           <Grid.Row>
-            <Transfer />
-          </Grid.Row>
-          <Grid.Row>
-            <NodeInfo />
+            <TransferTx />
           </Grid.Row>
           <Grid.Row>
             <Balances />
-          </Grid.Row>
-          <Grid.Row>
-            <Interactor />
-            <Events />
           </Grid.Row>
         </Grid>
       </Container>

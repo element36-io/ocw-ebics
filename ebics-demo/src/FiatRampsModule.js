@@ -24,9 +24,10 @@ function Main(props) {
         if (newValue.isNone) {
           setCurrentValue({})
         } else {
+          console.log("newValue: " + JSON.stringify(newValue.unwrap()["behaviour"].isKeep))
           setCurrentValue({
             iban: Buffer.from(newValue.unwrap()["iban"], "hex").toString(),
-            behaviour: Object.keys(newValue.unwrap()["behaviour"].toHuman())
+            behaviour: newValue.unwrap()["behaviour"].isKeep ? "Keep" : "Ping"
           })
         }
       })
@@ -42,7 +43,7 @@ function Main(props) {
 
   return (
     <Grid.Column textAlign="center" width={16}>
-      <h1>EBICS Bank</h1>
+      <h1>Buy me a coffee</h1>
       {!Object.keys(currentValue).length ?
         <>
           <Card centered fluid>
@@ -63,29 +64,6 @@ function Main(props) {
                 onChange={(_, { value }) => setFormIban(value)}
               />
             </Form.Field>
-            {/* <Form.Field>
-              <h4>Select behaviour of your account</h4>
-              <p>
-                <b>Keep</b> - the received funds will be kept on the account
-                <br/>
-                <b>Ping</b> - the received funds will be sent to the specified IBAN 
-              </p>
-              <Radio
-                label="Keep"
-                state="accountBehaviorKeep"
-                toggle={true}
-                type="radio"
-                onChange={(_, { value }) => setFormAccountBehavior(value ? 0 : 1)}
-              />
-              <br/>
-              <Radio
-                label="Ping"
-                state="accountBehaviorPing"
-                toggle={true}
-                type="radio"
-                onChange={(_, { value }) => setFormAccountBehavior(value ? 1 : 0)}
-              />
-            </Form.Field> */}
             <Form.Field style={{ textAlign: 'center' }}>
               <TxButton
                 label="Register Bank Account"
@@ -106,6 +84,7 @@ function Main(props) {
           <>
             <Card centered fluid>
               <Card.Content textAlign="center">
+                <h3> Your EBICS account details</h3>
                 <p>
                   <b>IBAN</b>
                 </p>
@@ -114,7 +93,6 @@ function Main(props) {
                   <b>Account Behavior</b>
                 </p>
                 <p>{currentValue.behaviour}</p>
-                
               </Card.Content>
             </Card>
             </>
@@ -124,7 +102,7 @@ function Main(props) {
   )
 }
 
-export default function TemplateModule(props) {
+export default function FiatRampsModule(props) {
   const { api } = useSubstrateState()
   return api.query.fiatRamps && api.query.fiatRamps.accounts ? (
     <Main {...props} />

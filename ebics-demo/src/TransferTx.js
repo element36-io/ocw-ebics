@@ -51,7 +51,7 @@ export default function Main(props) {
 
   return (
     <Grid.Column width={8} textAlign="center">
-      <h1>Transfer via extrinsic</h1>
+      <h2>Donate via on-chain transaction</h2>
       <Form>
         <Form.Field>
           <Label basic color="teal">

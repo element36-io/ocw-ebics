@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Dropdown, Form, Grid, Icon, Input, Label } from 'semantic-ui-react'
+import React, { useEffect, useState } from 'react'
+import { Dropdown, Form, Grid, Input } from 'semantic-ui-react'
 import { useSubstrateState } from './substrate-lib'
 import { TxButton } from './substrate-lib/components'
 
@@ -7,19 +7,19 @@ import { TxButton } from './substrate-lib/components'
 const destinationOptions = [
   "IBAN",
   "Address",
-  "Burn"
 ]
 
 export default function Main(props) {
   const [status, setStatus] = useState(null)
   const [formState, setFormState] = useState({ addressTo: '', ibanTo: '', amount: 0, destination: destinationOptions[0] })
+  const [availableIbans, setAvailableIbans] = useState([])
 
   const onChange = (_, data) =>
     setFormState(prev => ({ ...prev, [data.state]: data.value }))
 
   const { addressTo, amount, ibanTo, destination } = formState
 
-  const { keyring } = useSubstrateState()
+  const { keyring, api } = useSubstrateState()
   const accounts = keyring.getPairs()
 
   const availableAccounts = []
@@ -31,53 +31,35 @@ export default function Main(props) {
     })
   })
 
+  useEffect(() => {
+    if (api.query.fiatRamps) {
+        api.query.fiatRamps.accounts.entries()
+            .then((accounts) => {
+                setAvailableIbans(accounts.map(account => {
+                    return {
+                        key: Buffer.from(account[1].unwrap()['iban'], "hex").toString(),
+                        text: Buffer.from(account[1].unwrap()['iban'], "hex").toString(),
+                        value: Buffer.from(account[1].unwrap()['iban'], "hex").toString(),
+                    }
+                }))
+            })
+    }
+  }, [api.query.fiatRamps, api.query.fiatRamps.accounts])
+
   return (
     <Grid.Column width={8} textAlign="center">
-      <h1>Transfer via extrinsic</h1>
+      <h1>Transfer via EBICS API</h1>
       <Form>
         <Form.Field>
-          <Label basic color="teal">
-            <Icon name="hand point right" />1 Unit = 1000000000000&nbsp;
-          </Label>
-          <Label
-            basic
-            color="teal"
-            style={{ marginLeft: 0, marginTop: '.5em' }}
-          >
-            <Icon name="hand point right" />
-            Transfer more than the existential amount for account with 0 balance
-          </Label>
-        </Form.Field>
-
-        <Form.Field>
-          <Dropdown
-            placeholder="Transfer destination type"
-            fluid
-            selection
-            labeled
-            search
-            options={destinationOptions.map((option) => {
-              return {
-                key: option,
-                text: option,
-                value: option,
-              }
-            })}
-            text={`Transfer destination type: ${destination}`}
-            state="destination"
-            onChange={onChange}
-          />
-          {destination === "Address" &&
             <Dropdown
-              placeholder="Select from available addresses"
-              fluid
-              selection
-              search
-              options={availableAccounts}
-              state="addressTo"
-              onChange={onChange}
+                placeholder="Select from available addresses"
+                fluid
+                selection
+                search
+                options={availableIbans}
+                state="addressTo"
+                onChange={onChange}
             />
-          }
         </Form.Field>
 
         <Form.Field>
