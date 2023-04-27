@@ -103,23 +103,6 @@ pub struct Transaction<MaxLength: Get<u32>, StringMaxLength: Get<u32>> {
 	pub tx_type: TransactionType,
 }
 
-/// Behavior of a bank account on-chain
-///
-/// This defines what a bank account should do when it receives an extrinsic
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum AccountBehaviour<MaxLength: Get<u32>> {
-	/// Keep the balance of the account on-chain
-	Keep,
-	/// Burn the balance of the account on-chain, i.e send it to the burn address
-	Ping(Iban<MaxLength>),
-}
-
-impl<MaxLength: Get<u32>> Default for AccountBehaviour<MaxLength> {
-	fn default() -> Self {
-		Self::Keep
-	}
-}
-
 /// Representation of a Bank Account
 #[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct BankAccount<MaxLength: Get<u32>> {
@@ -129,8 +112,6 @@ pub struct BankAccount<MaxLength: Get<u32>> {
 	pub balance: u128,
 	/// Last block the statement was updated
 	pub last_updated: u64,
-	/// Behaviour of the bank account
-	pub behaviour: AccountBehaviour<MaxLength>,
 }
 
 /// Burn destination

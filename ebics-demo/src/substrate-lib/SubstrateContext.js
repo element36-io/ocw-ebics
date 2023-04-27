@@ -1,11 +1,11 @@
-import React, { useReducer, useContext, useEffect } from 'react'
-import PropTypes from 'prop-types'
-import jsonrpc from '@polkadot/types/interfaces/jsonrpc'
 import { ApiPromise, WsProvider } from '@polkadot/api'
 import { web3Accounts, web3Enable } from '@polkadot/extension-dapp'
+import { TypeRegistry } from '@polkadot/types/create'
+import jsonrpc from '@polkadot/types/interfaces/jsonrpc'
 import { keyring as Keyring } from '@polkadot/ui-keyring'
 import { isTestChain } from '@polkadot/util'
-import { TypeRegistry } from '@polkadot/types/create'
+import PropTypes from 'prop-types'
+import React, { useContext, useEffect, useReducer } from 'react'
 
 import config from '../config'
 
@@ -24,6 +24,12 @@ const initialState = {
   apiError: null,
   apiState: null,
   currentAccount: null,
+  recipient: {
+    name: "John Doe",
+    address: "5Hg6mE6QCiqDFH21yjDGe2JSezEZSTn9mBsZa6JsC3wo438c",
+    iban: "CH2108307000289537313",
+    donations: 0,
+  }
 }
 
 const registry = new TypeRegistry()
@@ -103,10 +109,10 @@ const loadAccounts = (state, dispatch) => {
       await web3Enable(config.APP_NAME)
       let allAccounts = await web3Accounts()
 
-      allAccounts = allAccounts.map(({ address, meta }) => ({
+      allAccounts = allAccounts.filter(({meta}) => meta.name.toLocaleLowerCase() !== "bob").map(({ address, meta }) => ({
         address,
         meta: { ...meta, name: `${meta.name} (${meta.source})` },
-      }))
+      }));
 
       // Logics to check if the connecting chain is a dev chain, coming from polkadot-js Apps
       // ref: https://github.com/polkadot-js/apps/blob/15b8004b2791eced0dde425d5dc7231a5f86c682/packages/react-api/src/Api.tsx?_pjax=div%5Bitemtype%3D%22http%3A%2F%2Fschema.org%2FSoftwareSourceCode%22%5D%20%3E%20main#L101-L110
@@ -116,7 +122,7 @@ const loadAccounts = (state, dispatch) => {
         systemChainType.isLocal ||
         isTestChain(systemChain)
 
-      Keyring.loadAll({ isDevelopment }, allAccounts)
+      Keyring.loadAll({isDevelopment}, allAccounts)
 
       dispatch({ type: 'SET_KEYRING', payload: Keyring })
     } catch (e) {

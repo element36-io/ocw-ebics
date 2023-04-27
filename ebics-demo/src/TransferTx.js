@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import { BN } from '@polkadot/util'
+import React, { useEffect, useState } from 'react'
 import { Dropdown, Form, Grid, Icon, Input, Label } from 'semantic-ui-react'
 import { useSubstrateState } from './substrate-lib'
 import { TxButton } from './substrate-lib/components'
@@ -29,6 +30,8 @@ const deriveDest = (dest, addressTo, ibanTo) => {
 }
 
 export default function Main(props) {
+  const base = new BN(10).pow(new BN(10))
+  
   const [status, setStatus] = useState(null)
   const [formState, setFormState] = useState({ addressTo: '', ibanTo: '', amount: 0, destination: destinationOptions[0] })
 
@@ -37,7 +40,7 @@ export default function Main(props) {
 
   const { addressTo, amount, ibanTo, destination } = formState
 
-  const { keyring } = useSubstrateState()
+  const { keyring, currentAccount, api, recipient } = useSubstrateState()
   const accounts = keyring.getPairs()
 
   const availableAccounts = []
@@ -48,6 +51,26 @@ export default function Main(props) {
       value: account.address,
     })
   })
+
+  useEffect(() => {
+    let unsubscribe
+    if (accounts) {
+      let addressTo = recipient.address
+      setFormState(prev => ({ ...prev, addressTo }))
+      api.query.fiatRamps
+        .accounts(addressTo, (result) => {
+          if (result.isSome) {
+            setFormState(prev => ({ ...prev, ibanTo: Buffer.from(result.unwrap()['iban'], "hex").toString() }))
+          }
+        })
+        .then(unsub => {
+          unsubscribe = unsub
+        })
+        .catch(console.error)
+      
+      return () => unsubscribe && unsubscribe()
+    }
+  }, [currentAccount?.address, api.query.fiatRamps])
 
   return (
     <Grid.Column width={8} textAlign="center">
@@ -85,17 +108,6 @@ export default function Main(props) {
             state="destination"
             onChange={onChange}
           />
-          {destination === "Address" &&
-            <Dropdown
-              placeholder="Select from available addresses"
-              fluid
-              selection
-              search
-              options={availableAccounts}
-              state="addressTo"
-              onChange={onChange}
-            />
-          }
         </Form.Field>
 
         <Form.Field>
@@ -107,7 +119,7 @@ export default function Main(props) {
               placeholder="address"
               value={addressTo}
               state="addressTo"
-              onChange={onChange}
+              disabled
             />
           }
           {destination === "IBAN" &&
@@ -119,6 +131,7 @@ export default function Main(props) {
               value={ibanTo}
               state="ibanTo"
               onChange={onChange}
+              disabled={ibanTo !== ""}
             />
           }
         </Form.Field>
@@ -139,7 +152,7 @@ export default function Main(props) {
             attrs={{
               palletRpc: 'fiatRamps',
               callable: 'transfer',
-              inputParams: [amount, deriveDest(destination, addressTo, ibanTo)],
+              inputParams: [base.mul(new BN(amount)), deriveDest(destination, addressTo, ibanTo)],
               paramFields: [true, true],
             }}
           />

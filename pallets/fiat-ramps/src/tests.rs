@@ -7,7 +7,7 @@ use sp_runtime::{DispatchError, RuntimeAppPublic};
 use std::sync::Arc;
 
 use crate::helpers::{get_mock_response, ResponseTypes, StatementTypes};
-use crate::types::{AccountBehaviour, BankAccountOf, TransactionOf, TransferDestination};
+use crate::types::{BankAccountOf, TransactionOf, TransferDestination};
 use crate::{
 	helpers::string_to_bounded_vec,
 	types::{IbanOf, Transaction, TransactionType},
@@ -215,18 +215,12 @@ fn test_iban_mapping() {
 		assert_ok!(FiatRampsExample::create_account(
 			Some(alice.clone()).into(),
 			alice_iban.clone(),
-			AccountBehaviour::Keep,
 		));
-		assert_ok!(FiatRampsExample::create_account(
-			Some(bob.clone()).into(),
-			bob_iban.clone(),
-			AccountBehaviour::Keep
-		));
+		assert_ok!(FiatRampsExample::create_account(Some(bob.clone()).into(), bob_iban.clone(),));
 
 		assert_ok!(FiatRampsExample::create_account(
 			Some(charlie.clone()).into(),
 			charlie_iban.clone(),
-			AccountBehaviour::Keep
 		));
 
 		assert_eq!(FiatRampsExample::get_account_id(&alice_iban).unwrap(), alice.clone());
@@ -381,20 +375,14 @@ fn test_burn_request() {
 		assert_ok!(FiatRampsExample::create_account(
 			Some(alice.clone()).into(),
 			alice_iban.clone(),
-			AccountBehaviour::Keep,
 		));
 		// map Bob iban
-		assert_ok!(FiatRampsExample::create_account(
-			Some(bob.clone()).into(),
-			bob_iban.clone(),
-			AccountBehaviour::Keep
-		));
+		assert_ok!(FiatRampsExample::create_account(Some(bob.clone()).into(), bob_iban.clone(),));
 
 		// map Charlie iban
 		assert_ok!(FiatRampsExample::create_account(
 			Some(charlie.clone()).into(),
 			charlie_iban.clone(),
-			AccountBehaviour::Keep,
 		));
 
 		// Pallet's balance before unpeg request

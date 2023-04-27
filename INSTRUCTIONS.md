@@ -61,13 +61,14 @@ Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> mapIb
     "iban" : "CH2108307000289537320",
     "accountId": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
   }, {
+    "ownerName" : "John Doe",
+    "iban" : "CH2108307000289537313",
+    "accountId": "5Hg6mE6QCiqDFH21yjDGe2JSezEZSTn9mBsZa6JsC3wo438c",
+    "seed": "0x5108e950fb18a11a372da602c1714f289002204a8003748263bb9c351b57d3aa"
+  }, {
     "ownerName" : "Bob",
     "iban" : "CH1230116000289537312",
     "accountId": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
-  }, {
-    "ownerName" : "Charlie",
-    "iban" : "CH2108307000289537313",
-    "accountId": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
   } ]
 }
 ```

@@ -62,7 +62,6 @@ pub(crate) fn get_mock_response<T: Config>(
 							iban: alice_iban.clone(),
 							balance: 4490000000000,
 							last_updated: 0,
-							behaviour: AccountBehaviour::Keep,
 						},
 						vec![
 							TransactionOf::<T>{
@@ -101,7 +100,6 @@ pub(crate) fn get_mock_response<T: Config>(
 								iban: bob_iban.clone(),
 								balance: 100000000000000000,
 								last_updated: 0,
-								behaviour: AccountBehaviour::Keep,
 							},
 							vec![
 								Transaction{
@@ -149,7 +147,6 @@ pub(crate) fn get_mock_response<T: Config>(
 								iban: charlie_iban.clone(),
 								balance: 100000000000000000,
 								last_updated: 0,
-								behaviour: AccountBehaviour::Keep,
 							},
 							vec![
 								Transaction{
@@ -195,7 +192,6 @@ pub(crate) fn get_mock_response<T: Config>(
 							iban: charlie_iban.clone(),
 							balance: 100000000000000000,
 							last_updated: 0,
-							behaviour: AccountBehaviour::Keep,
 						},
 						vec![Transaction {
 							iban: string_to_bounded_vec::<T::MaxIbanLength>(
@@ -298,7 +294,6 @@ pub(crate) fn get_mock_response<T: Config>(
                         iban: charlie_iban.clone(),
                         balance: 100000000000000000,
                         last_updated: 0,
-						behaviour: AccountBehaviour::Keep
                     },
                     vec![
                         Transaction {
@@ -324,7 +319,6 @@ pub(crate) fn get_mock_response<T: Config>(
                         iban: bob_iban.clone(),
                         balance: 100000000000000000,
                         last_updated: 0,
-						behaviour: AccountBehaviour::Keep
                     },
                     vec![
                         Transaction {
@@ -350,7 +344,6 @@ pub(crate) fn get_mock_response<T: Config>(
                         iban: alice_iban.clone(),
                         balance: 100000000000000000,
                         last_updated: 0,
-						behaviour: AccountBehaviour::Keep
                     },
                     vec![
 						Transaction {

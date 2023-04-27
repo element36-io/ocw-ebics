@@ -22,11 +22,10 @@ use frame_system::{
 };
 use lite_json::{json::JsonValue, parse_json, Serialize};
 use sp_core::hexdisplay::AsBytesRef;
-use sp_runtime::DispatchError;
 use sp_runtime::{
 	offchain as rt_offchain,
 	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
-	traits::AccountIdConversion,
+	traits::{AccountIdConversion, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidity},
 	AccountId32, RuntimeDebug, SaturatedConversion,
 };
@@ -56,7 +55,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use types::{AccountBehaviour, StringOf};
+	use types::StringOf;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -186,13 +185,8 @@ pub mod pallet {
 		///
 		/// * `origin` - The origin of the call
 		/// * `iban` - IBAN of the account
-		/// * `behaviour` - Behaviour of the account, i.e. whether it is a deposit or withdrawal account
 		#[pallet::weight(T::DbWeight::get().reads_writes(2, 1))]
-		pub fn create_account(
-			origin: OriginFor<T>,
-			iban: IbanOf<T>,
-			behaviour: AccountBehaviour<T::MaxIbanLength>,
-		) -> DispatchResultWithPostInfo {
+		pub fn create_account(origin: OriginFor<T>, iban: IbanOf<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
 			// TO-DO: need to check if account owner really owns this IBAN
@@ -200,7 +194,6 @@ pub mod pallet {
 				&who,
 				BankAccount::<T::MaxIbanLength> {
 					iban: iban.clone(),
-					behaviour,
 					balance: 0u128,
 					last_updated: T::TimeProvider::now().as_millis() as u64,
 				},
@@ -252,16 +245,7 @@ pub mod pallet {
 
 			ensure!(T::Currency::free_balance(&who) >= amount, Error::<T>::InsufficientBalance,);
 
-			ensure!(amount.saturated_into::<u128>() > 0, Error::<T>::AmountIsZero,);
-
-			// transfer amount to this pallet's account
-			T::Currency::transfer(
-				&who,
-				&Self::account_id(),
-				amount,
-				ExistenceRequirement::AllowDeath,
-			)
-			.map_err(|_| DispatchError::Other("Can't burn funds"))?;
+			ensure!(!amount.is_zero(), Error::<T>::AmountIsZero);
 
 			// Request id (nonce)
 			let request_id = Self::burn_request_count();
@@ -295,6 +279,14 @@ pub mod pallet {
 				TransferDestination::Withdraw => Some(who.clone()),
 				_ => Self::get_account_id(&dest_iban),
 			};
+
+			// transfer amount to this pallet's account
+			T::Currency::transfer(
+				&who,
+				&Self::account_id(),
+				amount,
+				ExistenceRequirement::AllowDeath,
+			)?;
 
 			// create burn request event
 			Self::deposit_event(Event::BurnRequest {

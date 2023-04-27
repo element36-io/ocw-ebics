@@ -1,3 +1,4 @@
+import { BN, formatBalance } from '@polkadot/util'
 import React, { useEffect, useState } from 'react'
 import { Card, Form, Grid, Input } from 'semantic-ui-react'
 
@@ -5,18 +6,39 @@ import { useSubstrateState } from './substrate-lib'
 import { TxButton } from './substrate-lib/components'
 
 function Main(props) {
-  const { api, currentAccount } = useSubstrateState()
+  const { api, currentAccount, recipient } = useSubstrateState()
 
   // The transaction submission status
   const [status, setStatus] = useState('')
+  const [totalDonations, setTotalDonations] = useState(0)
 
   // The currently stored value
   const [currentValue, setCurrentValue] = useState({})
   const [formIban, setFormIban] = useState('')
 
-  console.log("CurAccount" + currentAccount?.address)
-
   useEffect(() => {
+    function checkBalance() {
+      let unsubscribe
+      api.query.system.account(recipient.address, ({data: balance,}) => {
+        // initial balance of the demo account is 1000 pEURO
+        let newBalance = new BN(balance.free).sub(new BN(1000 * 10**10));
+        setTotalDonations(formatBalance(
+          newBalance,
+          { withUnit: 'pEURO' },
+          10
+        ))
+      })
+        .then(unsub => {
+          unsubscribe = unsub
+        }
+        )
+        .catch(console.error)
+
+      return () => unsubscribe && unsubscribe()
+    }
+
+    checkBalance()
+    
     let unsubscribe
     api.query.fiatRamps
       .accounts(currentAccount?.address, newValue => {
@@ -24,10 +46,8 @@ function Main(props) {
         if (newValue.isNone) {
           setCurrentValue({})
         } else {
-          console.log("newValue: " + JSON.stringify(newValue.unwrap()["behaviour"].isKeep))
           setCurrentValue({
             iban: Buffer.from(newValue.unwrap()["iban"], "hex").toString(),
-            behaviour: newValue.unwrap()["behaviour"].isKeep ? "Keep" : "Ping"
           })
         }
       })
@@ -39,12 +59,32 @@ function Main(props) {
     return () => unsubscribe && unsubscribe()
   }, [api.query.fiatRamps, currentAccount?.address])
 
-  console.log("Current Value: " + JSON.stringify(currentValue))
-
   return (
     <Grid.Column textAlign="center" width={16}>
       <h1>Buy me a coffee</h1>
-      {!Object.keys(currentValue).length ?
+        <Card centered fluid>
+          <Card.Content textAlign="center" style={{backgroundColor: "#ADD8E6" }}>
+            <h3> My EBICS account details</h3>
+            <p>
+              <b>Name</b>
+            </p>
+            <p>{recipient.name}</p>
+            <p>
+              <b>AccountId</b>
+            </p>
+            <p>{recipient.address}</p>
+            <p>
+              <b>IBAN</b>
+            </p>
+            <p>{recipient.iban}</p>
+
+            <p><b>Total donations</b></p>
+            <p>
+              {totalDonations.toString()}
+            </p>
+          </Card.Content>
+        </Card>
+      {!Object.keys(currentValue).length &&
         <>
           <Card centered fluid>
             <Card.Content textAlign="center">
@@ -72,31 +112,14 @@ function Main(props) {
                 attrs={{
                   palletRpc: 'fiatRamps',
                   callable: 'createAccount',
-                  inputParams: [formIban, 0x00],
-                  paramFields: [true, true],
+                  inputParams: [formIban],
+                  paramFields: [true],
                 }}
               />
             </Form.Field>
           <div style={{ overflowWrap: 'break-word' }}>{status}</div>
         </Form>
         </>
-        : (
-          <>
-            <Card centered fluid>
-              <Card.Content textAlign="center">
-                <h3> Your EBICS account details</h3>
-                <p>
-                  <b>IBAN</b>
-                </p>
-                <p>{currentValue.iban}</p>
-                <p>
-                  <b>Account Behavior</b>
-                </p>
-                <p>{currentValue.behaviour}</p>
-              </Card.Content>
-            </Card>
-            </>
-        )
       }
     </Grid.Column>
   )

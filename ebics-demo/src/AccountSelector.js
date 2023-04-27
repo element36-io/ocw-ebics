@@ -1,14 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { CopyToClipboard } from 'react-copy-to-clipboard'
 
 import {
-  Menu,
-  Button,
-  Dropdown,
-  Container,
-  Icon,
-  Image,
-  Label,
+  Button, Container, Dropdown, Icon, Label, Menu
 } from 'semantic-ui-react'
 
 import { useSubstrate, useSubstrateState } from './substrate-lib'
@@ -61,12 +55,6 @@ function Main(props) {
       }}
     >
       <Container>
-        <Menu.Menu>
-          <Image
-            src={`${process.env.PUBLIC_URL}/assets/substrate-logo.png`}
-            size="mini"
-          />
-        </Menu.Menu>
         <Menu.Menu position="right" style={{ alignItems: 'center' }}>
           {!currentAccount ? (
             <span>

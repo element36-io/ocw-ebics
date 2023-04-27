@@ -48,7 +48,11 @@ pub fn development_config() -> Result<ChainSpec, String> {
 	let ocw_account: [u8; 32] =
 		hex!("004771ae35f923e82e77fafd1f4b1878cd4b372a7406c7b88125119f5ffbdc29");
 
+	let demo_account: [u8; 32] =
+		hex!("f82bdd8e8bf7d0023007d0a4b9d8e1bfc1568833c4f8b8ba626c133b6553c434");
+
 	let ocw_account_id = AccountId::decode(&mut &ocw_account[..]).unwrap();
+	let demo_account_id = AccountId::decode(&mut &demo_account[..]).unwrap();
 
 	Ok(ChainSpec::from_genesis(
 		// Name
@@ -67,8 +71,8 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				vec![
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
-					get_account_id_from_seed::<sr25519::Public>("Charlie"),
 					ocw_account_id.clone(),
+					demo_account_id.clone(),
 				],
 				true,
 			)
@@ -107,16 +111,6 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 				vec![
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
-					get_account_id_from_seed::<sr25519::Public>("Charlie"),
-					get_account_id_from_seed::<sr25519::Public>("Dave"),
-					get_account_id_from_seed::<sr25519::Public>("Eve"),
-					get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-					get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Eve//stash"),
-					get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 				],
 				true,
 			)
@@ -149,8 +143,8 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		balances: BalancesConfig {
-			// Configure endowed accounts with initial balance of 10_000 pEURO (pegged EURO, 10 decimals)
-			balances: endowed_accounts.iter().cloned().map(|k| (k, 100_000_000_000_000)).collect(),
+			// Configure endowed accounts with initial balance of 1000 pEURO (pegged EURO, 10 decimals)
+			balances: endowed_accounts.iter().cloned().map(|k| (k, 10_000_000_000_000)).collect(),
 		},
 		aura: AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
