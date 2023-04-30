@@ -1605,6 +1605,7 @@ version = "1.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
+ "hex-literal",
  "lite-json",
  "log",
  "pallet-balances",
@@ -4025,6 +4026,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
+ "hex-literal",
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",

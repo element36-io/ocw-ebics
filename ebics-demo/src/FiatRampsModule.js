@@ -1,7 +1,6 @@
 import { BN, formatBalance } from '@polkadot/util'
 import React, { useEffect, useState } from 'react'
 import { Card, Form, Grid, Input } from 'semantic-ui-react'
-
 import { useSubstrateState } from './substrate-lib'
 import { TxButton } from './substrate-lib/components'
 
@@ -21,11 +20,14 @@ function Main(props) {
       let unsubscribe
       api.query.system.account(recipient.address, ({data: balance,}) => {
         // initial balance of the demo account is 1000 pEURO
-        let newBalance = new BN(balance.free).sub(new BN(1000 * 10**10));
+        let newBalance = new BN(balance.free).sub(new BN(1000 * 10**10))
         setTotalDonations(formatBalance(
           newBalance,
-          { withUnit: 'pEURO' },
-          10
+          {
+            decimals: 10,
+            forceUnit: "pEURO",
+            withUnit: "pEURO"
+          }
         ))
       })
         .then(unsub => {

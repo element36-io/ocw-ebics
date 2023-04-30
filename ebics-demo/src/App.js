@@ -9,7 +9,6 @@ import { SubstrateContextProvider, useSubstrateState } from './substrate-lib'
 import { DeveloperConsole } from './substrate-lib/components'
 
 import AccountSelector from './AccountSelector'
-import Balances from './Balances'
 import FiatRampsModule from './FiatRampsModule'
 import TransferTx from './TransferTx'
 
@@ -59,9 +58,6 @@ function Main() {
           </Grid.Row>
           <Grid.Row>
             <TransferTx />
-          </Grid.Row>
-          <Grid.Row>
-            <Balances />
           </Grid.Row>
         </Grid>
       </Container>

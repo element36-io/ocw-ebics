@@ -25,7 +25,7 @@ const initialState = {
   apiState: null,
   currentAccount: null,
   recipient: {
-    name: "John Doe",
+    name: "Jack",
     address: "5Hg6mE6QCiqDFH21yjDGe2JSezEZSTn9mBsZa6JsC3wo438c",
     iban: "CH2108307000289537313",
     donations: 0,

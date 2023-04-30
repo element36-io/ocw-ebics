@@ -4,13 +4,6 @@ import { Dropdown, Form, Grid, Icon, Input, Label } from 'semantic-ui-react'
 import { useSubstrateState } from './substrate-lib'
 import { TxButton } from './substrate-lib/components'
 
-// Destination options for transfer
-const destinationOptions = [
-  "IBAN",
-  "Address",
-  "Burn"
-]
-
 // Derive destination type from destination options
 const deriveDest = (dest, addressTo, ibanTo) => {
   switch (dest) {
@@ -24,7 +17,7 @@ const deriveDest = (dest, addressTo, ibanTo) => {
       }
     default:
       return {
-          "Burn": null
+          "Withdraw": null
         }
   }
 }
@@ -33,14 +26,17 @@ export default function Main(props) {
   const base = new BN(10).pow(new BN(10))
   
   const [status, setStatus] = useState(null)
-  const [formState, setFormState] = useState({ addressTo: '', ibanTo: '', amount: 0, destination: destinationOptions[0] })
+  const { keyring, currentAccount, api, recipient } = useSubstrateState()
+
+  const [canDonate, setCanDonate] = useState(false)
+  const [destinationOptions, setDestinationOptions] = useState(["IBAN", "Address"])
+  const [formState, setFormState] = useState({ addressTo: recipient.address, ibanTo: recipient.iban, amount: 0, destination: destinationOptions[0] })
 
   const onChange = (_, data) =>
     setFormState(prev => ({ ...prev, [data.state]: data.value }))
 
   const { addressTo, amount, ibanTo, destination } = formState
 
-  const { keyring, currentAccount, api, recipient } = useSubstrateState()
   const accounts = keyring.getPairs()
 
   const availableAccounts = []
@@ -55,23 +51,31 @@ export default function Main(props) {
   useEffect(() => {
     let unsubscribe
     if (accounts) {
-      let addressTo = recipient.address
-      setFormState(prev => ({ ...prev, addressTo }))
-      api.query.fiatRamps
-        .accounts(addressTo, (result) => {
-          if (result.isSome) {
-            setFormState(prev => ({ ...prev, ibanTo: Buffer.from(result.unwrap()['iban'], "hex").toString() }))
-          }
-        })
-        .then(unsub => {
-          unsubscribe = unsub
-        })
-        .catch(console.error)
-      
+      if (currentAccount?.address) {
+        if (currentAccount?.address === recipient.address) {
+          setDestinationOptions(["IBAN", "Address", "Withdraw"])
+        }
+
+        api.query.fiatRamps
+          .accounts(currentAccount?.address, (result) => {
+            if (result.isSome) {
+              setCanDonate(true)
+            }
+          })
+          .then(unsub => {
+            unsubscribe = unsub
+          })
+          .catch(console.error)
+      }
+
+    
       return () => unsubscribe && unsubscribe()
     }
   }, [currentAccount?.address, api.query.fiatRamps])
 
+  if (!canDonate) {
+    return <></>
+  }
   return (
     <Grid.Column width={8} textAlign="center">
       <h2>Donate via on-chain transaction</h2>
@@ -146,7 +150,7 @@ export default function Main(props) {
         </Form.Field>
         <Form.Field style={{ textAlign: 'center' }}>
           <TxButton
-            label="Submit"
+            label={destination === "Withdraw" ? "Withdraw" : "Donate"}
             type="SIGNED-TX"
             setStatus={setStatus}
             attrs={{

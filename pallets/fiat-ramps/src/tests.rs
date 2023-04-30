@@ -14,7 +14,7 @@ use crate::{
 	utils::*,
 };
 
-use crate::mock::*;
+use crate::{mock::*, Error};
 
 /// Utility function to test various scenarios for the `process_statements` extrinsic
 fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes) {
@@ -80,14 +80,24 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 
 						assert_eq!(
 							tx.call,
-							crate::Call::process_statements { statements: parsed_response.clone() }
-								.into()
+							crate::Call::process_statements {
+								statements: parsed_response.clone().try_into().unwrap()
+							}
+							.into()
 						);
 					},
 				}
 			},
 		}
 	})
+}
+
+/// Mock server response
+fn ebics_server_response(
+	state: &mut testing::OffchainState,
+	pending_request: testing::PendingRequest,
+) {
+	state.expect_request(pending_request);
 }
 
 #[test]
@@ -421,10 +431,22 @@ fn test_burn_request() {
 	})
 }
 
-/// Mock server response
-fn ebics_server_response(
-	state: &mut testing::OffchainState,
-	pending_request: testing::PendingRequest,
-) {
-	state.expect_request(pending_request);
+#[test]
+fn process_statements_is_permissioned() {
+	new_test_ext().execute_with(|| {
+		let test_accounts = get_test_accounts();
+
+		assert_noop!(
+			FiatRampsExample::process_statements(
+				RuntimeOrigin::signed(test_accounts[2]),
+				vec![].try_into().unwrap()
+			),
+			Error::<Test>::UnauthorizedCall,
+		);
+
+		assert_ok!(FiatRampsExample::process_statements(
+			RuntimeOrigin::signed(test_accounts[0]),
+			vec![].try_into().unwrap()
+		));
+	});
 }

@@ -126,18 +126,24 @@ parameter_types! {
 	/// Bound of string length
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub const MaxStringLength: u32 = 255;
+	/// OCW account
+	pub OcwAccount: AccountId = AccountId::from(Public::from_slice(&[1u8; 32]).unwrap());
+	/// Bound for statements
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub const MaxStatements: u32 = 255;
 }
 
 impl fiat_ramps::Config for Test {
 	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type TimeProvider = Timestamp;
 	type MinimumInterval = MinimumInterval;
 	type UnsignedPriority = UnsignedPriority;
 	type MaxIbanLength = MaxIbanLength;
 	type MaxStringLength = MaxStringLength;
+	type OcwAccount = OcwAccount;
+	type MaxStatements = MaxStatements;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test

@@ -1,7 +1,7 @@
 use hex_literal::hex;
 use node_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
-	SystemConfig, WASM_BINARY,
+	AccountId, AuraConfig, BalancesConfig, FiatRampsConfig, GenesisConfig, GrandpaConfig,
+	Signature, SudoConfig, SystemConfig, WASM_BINARY,
 };
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -75,6 +75,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 					demo_account_id.clone(),
 				],
 				true,
+				demo_account_id.clone(),
 			)
 		},
 		// Bootnodes
@@ -113,6 +114,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
 				],
 				true,
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
 			)
 		},
 		// Bootnodes
@@ -136,6 +138,7 @@ fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
+	ocw_account: AccountId,
 ) -> GenesisConfig {
 	GenesisConfig {
 		system: SystemConfig {
@@ -157,5 +160,8 @@ fn testnet_genesis(
 			key: Some(root_key),
 		},
 		transaction_payment: Default::default(),
+		fiat_ramps: FiatRampsConfig {
+			accounts: vec![(ocw_account, b"CH2108307000289537313".to_vec())],
+		},
 	}
 }

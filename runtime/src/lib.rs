@@ -19,7 +19,7 @@ use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiAddress, MultiSignature, SaturatedConversion,
+	AccountId32, ApplyExtrinsicResult, MultiAddress, MultiSignature, SaturatedConversion,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -295,6 +295,13 @@ parameter_types! {
 	pub const MaxIbanLength: u32 = 64;
 	#[derive(TypeInfo, Encode, Decode, Clone, PartialEq, Eq , MaxEncodedLen, Debug)]
 	pub const MaxStringLength: u32 = 256;
+	/// OCW account
+	pub OcwAccount: AccountId = AccountId::from(AccountId32::from(
+		hex_literal::hex!("004771ae35f923e82e77fafd1f4b1878cd4b372a7406c7b88125119f5ffbdc29")
+	));
+	/// Bound for statements
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub const MaxStatements: u32 = 255;
 }
 
 impl fiat_ramps::Config for Runtime {
@@ -306,6 +313,8 @@ impl fiat_ramps::Config for Runtime {
 	type UnsignedPriority = UnsignedPriority;
 	type MaxIbanLength = MaxIbanLength;
 	type MaxStringLength = MaxStringLength;
+	type OcwAccount = OcwAccount;
+	type MaxStatements = MaxStatements;
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
