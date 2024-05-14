@@ -2,15 +2,15 @@ use codec::Decode;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use lite_json::Serialize;
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
-use sp_keystore::{KeystoreExt, SyncCryptoStore};
+use sp_keystore::{Keystore, KeystoreExt};
 use sp_runtime::{DispatchError, RuntimeAppPublic};
 use std::sync::Arc;
 
-use crate::helpers::{get_mock_response, ResponseTypes, StatementTypes};
-use crate::types::{BankAccountOf, TransactionOf, TransferDestination};
 use crate::{
-	helpers::string_to_bounded_vec,
-	types::{IbanOf, Transaction, TransactionType},
+	helpers::{get_mock_response, string_to_bounded_vec, ResponseTypes, StatementTypes},
+	types::{
+		BankAccountOf, IbanOf, Transaction, TransactionOf, TransactionType, TransferDestination,
+	},
 	utils::*,
 };
 
@@ -20,17 +20,17 @@ use crate::{mock::*, Error};
 fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes) {
 	let (offchain, state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
-	let keystore = sp_keystore::testing::KeyStore::new();
+	let keystore = sp_keystore::testing::MemoryKeystore::new();
 
-	SyncCryptoStore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!(
-			"{}/alice",
-			"cup swing hill dinner pioneer mom stick steel sad raven oak practice"
-		)),
-	)
-	.unwrap();
+	keystore
+		.sr25519_generate_new(
+			crate::crypto::Public::ID,
+			Some(&format!(
+				"{}/alice",
+				"cup swing hill dinner pioneer mom stick steel sad raven oak practice"
+			)),
+		)
+		.unwrap();
 
 	let mut t = new_test_ext();
 
@@ -61,7 +61,7 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 				// No transactions should be sent for empty statement
 				assert!(pool_state.read().transactions.is_empty());
 			},
-			ResponseTypes::SingleStatement | ResponseTypes::MultipleStatements => {
+			ResponseTypes::SingleStatement | ResponseTypes::MultipleStatements =>
 				match statement_type {
 					StatementTypes::InvalidTransactions => {
 						assert_noop!(
@@ -86,8 +86,7 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 							.into()
 						);
 					},
-				}
-			},
+				},
 		}
 	})
 }
@@ -251,17 +250,17 @@ fn test_iban_mapping() {
 fn test_burn_request() {
 	let (offchain, state) = testing::TestOffchainExt::new();
 	let (pool, _pool_state) = testing::TestTransactionPoolExt::new();
-	let keystore = sp_keystore::testing::KeyStore::new();
+	let keystore = sp_keystore::testing::MemoryKeystore::new();
 
-	SyncCryptoStore::sr25519_generate_new(
-		&keystore,
-		crate::crypto::Public::ID,
-		Some(&format!(
-			"{}/alice",
-			"cup swing hill dinner pioneer mom stick steel sad raven oak practice"
-		)),
-	)
-	.unwrap();
+	keystore
+		.sr25519_generate_new(
+			crate::crypto::Public::ID,
+			Some(&format!(
+				"{}/alice",
+				"cup swing hill dinner pioneer mom stick steel sad raven oak practice"
+			)),
+		)
+		.unwrap();
 
 	let mut t = new_test_ext();
 
