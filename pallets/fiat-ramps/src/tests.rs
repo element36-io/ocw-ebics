@@ -1,7 +1,10 @@
 use codec::Decode;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use lite_json::Serialize;
-use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
+use sp_core::{
+	crypto::Ss58Codec,
+	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
+};
 use sp_keystore::{Keystore, KeystoreExt};
 use sp_runtime::{traits::BadOrigin, DispatchError, RuntimeAppPublic};
 use std::sync::Arc;
@@ -398,17 +401,29 @@ fn test_burn_request() {
 	let charlie_iban: IbanOf<Test> = string_to_bounded_vec("CH1230116000289537313");
 
 	{
-		let mock_unpeg_request =
-			unpeg_request::<Test>(&format!("{:?}", bob), 10000, &bob_iban, &"0".to_string())
-				.serialize();
+		let mock_unpeg_request = unpeg_request::<Test>(
+			&format!("{:?}", bob.to_ss58check()),
+			10000,
+			&bob_iban,
+			&"0".to_string(),
+		)
+		.serialize();
 
-		let mock_unpeg_request_1 =
-			unpeg_request::<Test>(&format!("{:?}", charlie), 100, &charlie_iban, &"1".to_string())
-				.serialize();
+		let mock_unpeg_request_1 = unpeg_request::<Test>(
+			&format!("{:?}", charlie.to_ss58check()),
+			100,
+			&charlie_iban,
+			&"1".to_string(),
+		)
+		.serialize();
 
-		let mock_unpeg_request_2 =
-			unpeg_request::<Test>(&format!("{:?}", charlie), 1000, &charlie_iban, &"2".to_string())
-				.serialize();
+		let mock_unpeg_request_2 = unpeg_request::<Test>(
+			&format!("{:?}", charlie.to_ss58check()),
+			1000,
+			&charlie_iban,
+			&"2".to_string(),
+		)
+		.serialize();
 
 		let unpeg_endpoint = "http://localhost:8093/ebics/api-v1/unpeg";
 
