@@ -45,7 +45,11 @@ And you also need to get the image ID of the `hyperfridge` `riscv0` module. You 
 
 ```bash
 docker compose run hyperfridge cat /app/IMAGE_ID.hex
+
+dcaba464d4909890d6638dd14e7a25853a8dd2cad14639d0d310987b32a43957
 ```
+
+Copy that image ID and pass it to the sudo extrinsic when the chain is running.
 
 ## Demo
 
@@ -63,7 +67,11 @@ suri: cup swing hill dinner pioneer mom stick steel sad raven oak practice
 public_key: 5C555czPfaHgYhKhsRg2KNCLGCJ82jVsvweTHAnfvT83uy5T
 ```
 
-Then, choose `FiatRamps.setApiUrl` extrinsic and paste the new url for the API and click `Submit transaction`. If everything is good, i.e you are the Sudo account and you have the necessary rights, you should see the transaction included in the block and offchain worker starts querying the new API.
+Insert image ID with `fiatRamps::setRisc0ImageId` extrinsic call. This is necessary for offchain worker to know which image to use when running the `riscv0` module. Choose `fiatRamps -> setRisc0ImageId` extrinsic and paste the image ID from the previous step. Click `Submit transaction`.
+
+![Image ID](/assets/image-id.png)
+
+Then, choose `FiatRamps.setApiUrl` extrinsic and paste the new url for the API and click `Submit transaction`. This is only necessary if you have a different URL than the default one with Ebics Java service.
 
 Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> createAccount` call. Here we need to map Alice's IBAN number to his on-chain account address. Simply choose Alice as a signer, copy and paste value of the IBAN number from the following JSON file and submit the extrinsic.
 
