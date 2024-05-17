@@ -1,25 +1,29 @@
-FROM rust as build
-RUN mkdir -p /app
-COPY runtime  /app/runtime
-COPY node /app/node
-COPY pallets /app/pallets
-COPY shell.nix .envrc rustfmt.toml Cargo.toml Cargo.lock /app/
+# Use a base image with Rust and necessary build tools
+FROM paritytech/ci-unified as builder
+
+# Set the working directory
 WORKDIR /app
-RUN apt-get update
-RUN apt install -y git cmake clang curl libssl-dev llvm libudev-dev
-RUN rustup default stable
-RUN rustup update nightly
-RUN rustup update stable
-RUN rustup target add wasm32-unknown-unknown --toolchain nightly
+
+# Copy the substrate node code to the container
+COPY . .
+
+# Build the substrate node
 RUN cargo build --release
 
-FROM debian:buster-slim as runtime
-RUN apt update
-RUN apt install -y git cmake clang curl libssl-dev llvm libudev-dev
-RUN mkdir /app
-RUN mkdir /app/target
-COPY --from=build /app/target /app/target
-WORKDIR /app/target
-EXPOSE 9944 30333 9933
+# Use a smaller base image for the final image
+FROM debian:bullseye-slim
 
-ENTRYPOINT ["/app/target/"]
+# Install necessary dependencies
+RUN apt-get update && \
+    apt-get install -y libssl-dev libssl1.1 ca-certificates && \
+    update-ca-certificates --fresh && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the built substrate node binary from the builder stage
+COPY --from=builder /app/target/release/node-template /usr/local/bin/
+
+# Expose the default substrate node port
+EXPOSE 30333 9933 9944 9615
+
+# Set the entrypoint command to start the substrate node
+ENTRYPOINT ["node-template"]

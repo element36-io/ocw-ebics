@@ -176,21 +176,21 @@ First, install [Docker](https://docs.docker.com/get-docker/) and
 
 Then run the following command to start a single node development chain.
 
-```bash
-./scripts/docker_run.sh
-```
-
-This command will firstly compile your code, and then start a local development network. You can
-also replace the default command (`cargo build --release && ./target/release/node-template --dev --ws-external`)
-by appending your own. A few useful ones are as follow.
+Docker:
 
 ```bash
-# Run Substrate node without re-compiling
-./scripts/docker_run.sh ./target/release/node-template --dev --ws-external
+# Ready to use docker image
+docker run -it -p 9944:9944 e36io/ebics-ocw:hyperfridge --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
 
-# Purge the local dev chain
-./scripts/docker_run.sh ./target/release/node-template purge-chain --dev
+# Build docker image MacOS (M1)
+docker build --platform linux/x86_64 -t ebics-ocw .
 
-# Check whether the code is compilable
-./scripts/docker_run.sh cargo check
+# Build docker image Linux
+docker build -t ebics-ocw .
+
+# Run docker image MacOS (M1)
+docker run --platform=linux/x86_64 -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
+
+# Run docker image Linux
+docker run -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
 ```
