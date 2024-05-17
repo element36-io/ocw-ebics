@@ -3,15 +3,18 @@ use frame_support::{assert_err, assert_noop, assert_ok};
 use lite_json::Serialize;
 use sp_core::offchain::{testing, OffchainWorkerExt, TransactionPoolExt};
 use sp_keystore::{Keystore, KeystoreExt};
-use sp_runtime::{DispatchError, RuntimeAppPublic};
+use sp_runtime::{traits::BadOrigin, DispatchError, RuntimeAppPublic};
 use std::sync::Arc;
 
 use crate::{
-	helpers::{get_mock_response, string_to_bounded_vec, ResponseTypes, StatementTypes},
+	helpers::{
+		get_mock_receipt, get_mock_response, string_to_bounded_vec, ResponseTypes, StatementTypes,
+	},
 	types::{
 		BankAccountOf, IbanOf, Transaction, TransactionOf, TransactionType, TransferDestination,
 	},
 	utils::*,
+	Config, QueuedStatements,
 };
 
 use crate::{mock::*, Error};
@@ -41,7 +44,7 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 	let (response_bytes, parsed_response) =
 		get_mock_response::<Test>(response_type.clone(), statement_type.clone());
 
-	let statements_endpoint = "http://w.e36.io:8093/ebics/api-v1/bankstatements".to_string();
+	let statements_endpoint = "http://localhost:8093/ebics/api-v1/bankstatements".to_string();
 
 	ebics_server_response(
 		&mut state.write(),
@@ -55,9 +58,12 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 	);
 
 	t.execute_with(|| {
+		FiatRampsExample::set_risc0_image_id(RuntimeOrigin::root(), [0u8; 32]).unwrap();
+
 		match response_type {
 			ResponseTypes::Empty => {
-				let _res = FiatRampsExample::fetch_transactions_and_send_signed();
+				let _res =
+					FiatRampsExample::fetch_and_send_signed(crate::OcwActivity::FetchStatements);
 				// No transactions should be sent for empty statement
 				assert!(pool_state.read().transactions.is_empty());
 			},
@@ -65,12 +71,16 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 				match statement_type {
 					StatementTypes::InvalidTransactions => {
 						assert_noop!(
-							FiatRampsExample::fetch_transactions_and_send_signed(),
+							FiatRampsExample::fetch_and_send_signed(
+								crate::OcwActivity::FetchStatements
+							),
 							"Error in parsing json"
 						);
 					},
 					_ => {
-						assert_ok!(FiatRampsExample::fetch_transactions_and_send_signed());
+						assert_ok!(FiatRampsExample::fetch_and_send_signed(
+							crate::OcwActivity::FetchStatements
+						));
 						let tx = pool_state.write().transactions.pop().unwrap();
 
 						assert!(pool_state.read().transactions.is_empty());
@@ -80,8 +90,9 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 
 						assert_eq!(
 							tx.call,
-							crate::Call::process_statements {
-								statements: parsed_response.clone().try_into().unwrap()
+							crate::Call::queue_statements {
+								receipt_url: parsed_response.clone().unwrap().receipt_url,
+								statements: parsed_response.unwrap().statements,
 							}
 							.into()
 						);
@@ -135,7 +146,7 @@ fn should_make_http_call_and_parse() {
 		StatementTypes::IncomingTransactions,
 	);
 
-	let statements_endpoint = "http://w.e36.io:8093/ebics/api-v1/bankstatements".to_string();
+	let statements_endpoint = "http://localhost:8093/ebics/api-v1/bankstatements".to_string();
 
 	ebics_server_response(
 		&mut state.write(),
@@ -149,7 +160,7 @@ fn should_make_http_call_and_parse() {
 	);
 
 	t.execute_with(|| {
-		let response = FiatRampsExample::fetch_json().unwrap();
+		let response = FiatRampsExample::fetch_json("api-v1/bankstatements").unwrap();
 		let raw_array = response.as_array();
 
 		if let Some(v) = raw_array {
@@ -170,40 +181,148 @@ fn should_make_http_call_and_parse() {
 			}
 
 			assert_eq!(balances.len(), 1);
-			assert_eq!(balances[0].0, parsed_response[0].0);
-			assert_eq!(balances[0].1, parsed_response[0].1);
+			assert_eq!(
+				b"abcd.json".to_vec(),
+				parsed_response.clone().unwrap().receipt_url.into_inner()
+			);
+			assert_eq!(balances[0].0, parsed_response.clone().unwrap().statements[0].0);
+			assert_eq!(
+				balances[0].1,
+				parsed_response.unwrap().statements[0].clone().1.into_inner()
+			);
 		}
 	})
 }
 
 #[test]
-fn test_process_empty_statement() {
+fn test_queue_empty_statement() {
 	test_processing(StatementTypes::Empty, ResponseTypes::Empty)
 }
 
 #[test]
-fn test_process_incoming_transactions() {
+fn test_queue_incoming_transactions() {
 	test_processing(StatementTypes::IncomingTransactions, ResponseTypes::SingleStatement)
 }
 
 #[test]
-fn test_process_outgoing_transactions() {
+fn test_queue_outgoing_transactions() {
 	test_processing(StatementTypes::OutgoingTransactions, ResponseTypes::SingleStatement)
 }
 
 #[test]
-fn test_process_multiple_statements() {
+fn test_queue_multiple_statements() {
 	test_processing(StatementTypes::CompleteTransactions, ResponseTypes::MultipleStatements)
 }
 
 #[test]
-fn test_process_multiple_statements_outgoing() {
+fn test_queue_multiple_statements_outgoing() {
 	test_processing(StatementTypes::OutgoingTransactions, ResponseTypes::MultipleStatements)
 }
 
 #[test]
-fn test_process_invalid_transactions() {
+fn test_queue_invalid_transactions() {
 	test_processing(StatementTypes::InvalidTransactions, ResponseTypes::SingleStatement)
+}
+
+#[test]
+fn test_verify_queued_statements_works() {
+	let (offchain, state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+	let keystore = sp_keystore::testing::MemoryKeystore::new();
+
+	keystore
+		.sr25519_generate_new(
+			crate::crypto::Public::ID,
+			Some(&format!(
+				"{}/alice",
+				"cup swing hill dinner pioneer mom stick steel sad raven oak practice"
+			)),
+		)
+		.unwrap();
+
+	let public = keystore.sr25519_public_keys(crate::crypto::Public::ID).pop().unwrap().clone();
+
+	let mut t = new_test_ext();
+
+	t.register_extension(OffchainWorkerExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(Arc::new(keystore)));
+
+	let (response_bytes, parsed_response) = get_mock_response::<Test>(
+		ResponseTypes::SingleStatement,
+		StatementTypes::OutgoingTransactions,
+	);
+
+	let statements_endpoint = "http://localhost:8093/ebics/api-v1/bankstatements".to_string();
+
+	ebics_server_response(
+		&mut state.write(),
+		testing::PendingRequest {
+			method: "GET".to_string(),
+			uri: statements_endpoint.clone(),
+			response: Some(response_bytes.clone()),
+			sent: true,
+			..Default::default()
+		},
+	);
+
+	let (receipt_response_bytes, _receipt_response) = get_mock_receipt();
+
+	let receipt_endpoint = "http://localhost:8093/ebics/abcd.json".to_string();
+
+	ebics_server_response(
+		&mut state.write(),
+		testing::PendingRequest {
+			method: "GET".to_string(),
+			uri: receipt_endpoint.clone(),
+			response: Some(receipt_response_bytes.clone()),
+			sent: true,
+			..Default::default()
+		},
+	);
+
+	t.execute_with(|| {
+		assert_ok!(FiatRampsExample::set_risc0_image_id(RuntimeOrigin::root(), [0u8; 32]));
+		assert_ok!(FiatRampsExample::fetch_and_send_signed(crate::OcwActivity::FetchStatements));
+
+		let tx_in_pool = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx_in_pool).unwrap();
+
+		assert_eq!(tx.signature.unwrap().0, 0);
+
+		let statements = if let RuntimeCall::FiatRampsExample(crate::Call::queue_statements {
+			receipt_url,
+			statements,
+		}) = tx.call
+		{
+			assert_eq!(receipt_url, parsed_response.clone().unwrap().receipt_url);
+			statements
+		} else {
+			panic!("Unexpected call: {:?}", tx.call);
+		};
+
+		assert!(parsed_response.clone().unwrap().statements.len() > 0);
+		assert_eq!(statements, parsed_response.clone().unwrap().statements);
+
+		assert_ok!(FiatRampsExample::queue_statements(
+			RuntimeOrigin::signed(public),
+			parsed_response.clone().unwrap().receipt_url,
+			parsed_response.unwrap().statements
+		));
+
+		assert_ok!(FiatRampsExample::fetch_and_send_signed(
+			crate::OcwActivity::VerifyAndProcessStatements
+		));
+
+		// check if transaction is in the pool
+		let tx_in_pool = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx_in_pool).unwrap();
+
+		assert!(matches!(
+			tx.call,
+			RuntimeCall::FiatRampsExample(crate::Call::process_statements { .. })
+		));
+	});
 }
 
 #[test]
@@ -291,7 +410,7 @@ fn test_burn_request() {
 			unpeg_request::<Test>(&format!("{:?}", charlie), 1000, &charlie_iban, &"2".to_string())
 				.serialize();
 
-		let unpeg_endpoint = "http://w.e36.io:8093/ebics/api-v1/unpeg";
+		let unpeg_endpoint = "http://localhost:8093/ebics/api-v1/unpeg";
 
 		ebics_server_response(
 			&mut state.write(),
@@ -436,16 +555,35 @@ fn process_statements_is_permissioned() {
 		let test_accounts = get_test_accounts();
 
 		assert_noop!(
-			FiatRampsExample::process_statements(
-				RuntimeOrigin::signed(test_accounts[2]),
-				vec![].try_into().unwrap()
-			),
+			FiatRampsExample::process_statements(RuntimeOrigin::signed(test_accounts[2]),),
 			Error::<Test>::UnauthorizedCall,
 		);
 
-		assert_ok!(FiatRampsExample::process_statements(
-			RuntimeOrigin::signed(test_accounts[0]),
-			vec![].try_into().unwrap()
-		));
+		QueuedStatements::<Test>::put(crate::QueuedStatementsInfo {
+			statements: vec![].try_into().unwrap(),
+			block_number: 0,
+			receipt_url: vec![0u8; 32].try_into().unwrap(),
+		});
+
+		assert_ok!(FiatRampsExample::process_statements(RuntimeOrigin::signed(
+			<Test as Config>::OcwAccount::get()
+		),));
+	});
+}
+
+#[test]
+fn set_risc0_image_id() {
+	new_test_ext().execute_with(|| {
+		let test_accounts = get_test_accounts();
+
+		assert_noop!(
+			FiatRampsExample::set_risc0_image_id(
+				RuntimeOrigin::signed(test_accounts[2]),
+				[0u8; 32]
+			),
+			BadOrigin
+		);
+
+		assert_ok!(FiatRampsExample::set_risc0_image_id(RuntimeOrigin::root(), [0u8; 32]));
 	});
 }

@@ -12,16 +12,10 @@ impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
 	}
 }
 
-impl Default for OcwActivity {
-	fn default() -> Self {
-		OcwActivity::None
-	}
-}
-
 impl From<u32> for OcwActivity {
 	fn from(activity: u32) -> Self {
 		match activity {
-			0 => OcwActivity::ProcessStatements,
+			0 => OcwActivity::FetchStatements,
 			1 => OcwActivity::ProcessBurnRequests,
 			_ => OcwActivity::None,
 		}

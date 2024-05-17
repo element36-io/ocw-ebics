@@ -8,7 +8,7 @@ FiatRamps is a chain that aims to connect EBICS banking interface to Polkadot ec
 
 Below is the workflow for easily ramping on and off to our chain:
 
-- First and foremost, every user that wants to connect their bank account to FiatRamps, needs to call `map_iban_account` extrinsic
+- First and foremost, every user that wants to connect their bank account to FiatRamps, needs to call `createAccount` extrinsic
 - Once on-chain account is mapped to off-chain bank account, user can perform following actions:
   - Burn funds, i.e withdraw from bank account
   - Transfer funds to IBAN, i.e transfer funds to another IBAN account
@@ -35,6 +35,18 @@ Below is a tutorial that demonstrates how our Substrate solo chain works.
 
 To get started, obviously make sure you have the necessary setup for Substrate development.
 
+## Ebics Java Service
+
+First, we need to run the EBICS Java service. This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.
+
+### Image ID
+
+And you also need to get the image ID of the `hyperfridge` `riscv0` module. You can get it by running the following command:
+
+```bash
+docker compose run hyperfridge cat /app/IMAGE_ID.hex
+```
+
 ## Demo
 
 Compile and run the node with:
@@ -51,7 +63,9 @@ suri: cup swing hill dinner pioneer mom stick steel sad raven oak practice
 public_key: 5C555czPfaHgYhKhsRg2KNCLGCJ82jVsvweTHAnfvT83uy5T
 ```
 
-Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> createAccount` call. Here we need to map Alice's IBAN number to his on-chain account address. Simply choose Alice as a signer and the  copy and paste value of the IBAN number from the following JSON file and submit the extrinsic.
+Then, choose `FiatRamps.setApiUrl` extrinsic and paste the new url for the API and click `Submit transaction`. If everything is good, i.e you are the Sudo account and you have the necessary rights, you should see the transaction included in the block and offchain worker starts querying the new API.
+
+Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> createAccount` call. Here we need to map Alice's IBAN number to his on-chain account address. Simply choose Alice as a signer, copy and paste value of the IBAN number from the following JSON file and submit the extrinsic.
 
 ```json
 {
@@ -78,54 +92,53 @@ Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> creat
 
 #### Stablecoins are minted to Alice
 
-Stablecoins are minted only when offchain worker detects an incoming transaction from an unknown IBAN address, i.e from an IBAN address is not mapped to any on-chain account address. In order to see how it works in action, head over to the EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). Open `/ebics/api-v1/createOrder` tab and fill out Charlie's details. Namely, we will `purpose` field with Alice's on-chain account and `receipientIban` field with her IBAN number. Fill out Charlie's IBAN from above JSON file as the `sourceIban`. Finally, execute the call. It should look something like this:
+Stablecoins are minted only when offchain worker detects an incoming transaction from an unknown IBAN address, i.e from an IBAN address is not mapped to any on-chain account address. In order to see how it works in action, head over to the EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). Open `/ebics/api-v1/createOrder` tab and fill out Bob's details. Namely, we will fill `purpose` field with Alice's on-chain account and `receipientIban` field with her IBAN number. Fill out Bob's IBAN from above JSON file as the `sourceIban`. Finally, execute the call. It should look something like this:
 
-![Alice mints](/assets/ebics-minting.png)
+![Alice mints](/assets/ebics-minting-zk.png)
 
 Then wait a little bit until offchain worker picks up the statement. After some time (3-5 blocktimes) you should see that new tokens were minted:
 
-![Mint event happens](/assets/ocw-minting.png)
+![Mint event happens](/assets/ocw-minting-zk.png)
 
 This is how new stablecoins are minted in our chain.
 
 ### Stablecoins are burned from Alice
 
-Now, in order to see how burning works, we can either go to EBICS service again and call `/ebics/api-v1/unpeg` request or submit `fiatRamps.transfer` extrinsic. Let's use EBICS service again, as extrinsic calls are covered in the next demos. After filling up the `recipientIban` field with Charlie's IBAN, our call should look like this:
+Now, in order to see how burning works, we can either go to EBICS service again and call `/ebics/api-v1/unpeg` request or submit `fiatRamps.transfer` extrinsic. Let's use EBICS service again, as extrinsic calls are covered in the next demos. After filling up the `recipientIban` field with Bob's IBAN, our call should look like this:
 
-![Alice burns](/assets/ebics-burning.png)
+![Alice burns](/assets/ebics-burning-zk.png)
 
 Again, we wait for offchain worker to process the statement and shortly after we should see that it emits a Burn event:
 
-![Burn event happens](/assets/ocw-burning.png)
+![Burn event happens](/assets/ocw-burning-zk.png)
 
-#### Alice transfers to Charlie via EBICS API
+#### Alice transfers to Jack via EBICS API
 
-For this part of the tutorial we will need to map Charlie and Bob's IBAN numbers to their on-chain account addresses. We submit `createAccount` extrinsic with IBAN addresses of Charlie and Bob, respectively, making sure that they are signing the extrinsic call. For example, Bob mapping his account would look like this:
+For this part of the tutorial we will need to map Jack and Bob's IBAN numbers to their on-chain account addresses. We submit `createAccount` extrinsic with IBAN addresses of Jack and Bob, respectively, making sure that they are signing the extrinsic call. For example, Bob mapping his account would look like this:
 
 ![Bob connects his account](/assets/bob-map-iban.png)
 
 It is also very important to know that we can not use PolkadotJS transfer button to move funds in our chain. This would break synchronization between the bank account balance and on-chain balance. In the future it should be disabled and the only way to transfer should be via burn requests.
 
-To make a transfer from Alice to Charlie, we head over to our EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). We open `/ebics/api-v1/createOrder` tab and fill out Charlie's details. Namely, we will `purpose` field with Charlie's on-chain account and `receipientIban` field with his IBAN number. And `sourceIban` field with Alice's IBAN number. We can then specify the amount and other fields. It should look similar to this:
+To make a transfer from Alice to Jack, we head over to our EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). We open `/ebics/api-v1/createOrder` tab and fill out Jack's details. Namely, we will `purpose` field with Jack's on-chain account and `receipientIban` field with his IBAN number. And `sourceIban` field with Alice's IBAN number. We can then specify the amount and other fields. It should look similar to this:
 
-![Alice transfer to Charlie](/assets/alice-transfer-charlie.png)
+![Alice transfer to Jack](/assets/alice-transfers-jack-zk.png)
 
-This will create a new order and will end up in Alice's bank statement as an outgoing transaction. And when our offchain worker queries bank statements, it will parse Charlie's on-chain account from `reference` field or query it from storage using his IBAN number. Note that transfer on-chain won't happen instantly, since offchain worker performs activities within a minimum of 5 block times interval (~30 seconds) and there are 3 types of actions. So, there is around 90 seconds of time between each new bank statements processing. 
+This will create a new order and will end up in Alice's bank statement as an outgoing transaction. And when our offchain worker queries bank statements, it will parse Jack's on-chain account from `reference` field or query it from storage using his IBAN number. Note that transfer on-chain won't happen instantly, since offchain worker performs activities within a minimum of 5 block times interval (~30 seconds) and there are 3 types of actions. So, there is around 90 seconds of time between each new bank statements processing. 
 
 Once offchain worker has processed new statements, two `Transfer` events occur:
 
-![Transfer from Alice to Charlie](/assets/alice-bob-events.png)
+![Transfer from Alice to Jack](/assets/jack-to-alice-zk.png)
 
-#### Alice transfers to Charlie via Extrinsic
+#### Alice transfers to Jack via Extrinsic
 
-We go to `Extrinsic` tab, choose `fiatRamps.transfer` extrinsic call and choose `destination` as `Address`. Fill out the necessary fields and make sure that the amount is a positive number, otherwise extrinsic will fail.
+We go to `Extrinsic` tab, choose `fiatRamps.transfer` extrinsic call and choose `destination` as `Address`. Fill out the necessary fields and make sure that the amount is a positive number and more than 1 UNIT (10 decimals), otherwise extrinsic will fail.
 
-![Extrinsic from Alice to Charlie](/assets/alice-charlie-ext.png)
+![Extrinsic from Alice to Jack](/assets/alice-jack-ext-zk.png)
 
 After we submit extrinsic, we can see that the burn request event is created.
 
-![Extrinsic from Alice to Charlie](/assets/alice-charlie-event-request.png)
+Shortly after (approximately 3-4 blocks), we can notice that the burn request has been processed and transfer between Alice and Jack occurs. Notice that transfer occurs from an unknown wallet to Jack, not directly from Alice to Jack. This is offchain worker's account that stores the funds until transaction is finalized by LibEUfin backend.
 
-Shortly after (approximately 3-4 blocks), we can notice that the burn request has been processed and transfer between Alice and Charlie occurs. Notice that transfer occurs from an unknown wallet to Charlie, not directly from Alice to Charlie. This is offchain worker's account that stores the funds until transaction is finalized by LibEUfin backend.
-
-![Extrinsic from Alice to Charlie](/assets/alice-charlie-transfer.png)
+![Extrinsic from Alice to Jack](/assets/alice-jack-event-zk.png)
+ 

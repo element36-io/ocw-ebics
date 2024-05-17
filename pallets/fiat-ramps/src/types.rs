@@ -18,7 +18,7 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ramp");
 pub const PALLET_ID: PalletId = PalletId(*b"FiatRamp");
 
 /// Hardcoded inital test api endpoint
-pub const API_URL: &[u8; 33] = b"http://w.e36.io:8093/ebics/api-v1";
+pub const API_URL: &[u8; 27] = b"http://localhost:8093/ebics";
 
 /// Account id of
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -49,11 +49,19 @@ pub type BankAccountOf<T> = BankAccount<<T as Config>::MaxIbanLength>;
 pub type TransferDestinationOf<T> =
 	TransferDestination<<T as Config>::MaxIbanLength, <T as frame_system::Config>::AccountId>;
 
+/// Explicit `BoundedVec<Statement>` type alias
+pub type StatementsOf<T> = BoundedVec<
+	(BankAccountOf<T>, BoundedVec<TransactionOf<T>, <T as Config>::MaxStatements>),
+	<T as Config>::MaxStatements,
+>;
+
 /// Types of activities that can be performed by the OCW
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, Default)]
 pub enum OcwActivity {
-	ProcessStatements,
+	FetchStatements,
 	ProcessBurnRequests,
+	VerifyAndProcessStatements,
+	#[default]
 	None,
 }
 
@@ -79,7 +87,7 @@ pub(crate) struct Payload<Public> {
 }
 
 /// Type of transaction
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum TransactionType {
 	Incoming,
 	Outgoing,
@@ -87,7 +95,7 @@ pub enum TransactionType {
 }
 
 /// Representation of transaction in EBICS format
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Transaction<MaxLength: Get<u32>, StringMaxLength: Get<u32>> {
 	/// IBAN of the sender
 	pub iban: Iban<MaxLength>,
@@ -124,3 +132,20 @@ pub enum TransferDestination<MaxLength: Get<u32>, AccountId> {
 	/// Withdraw
 	Withdraw,
 }
+
+/// Information about the queued statements
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub struct QueuedStatementsInfo<BlockNumber, Statements, ReceiptUrl> {
+	/// Block number when the statements were queued
+	pub block_number: BlockNumber,
+	/// List of statements
+	pub statements: Statements,
+	/// URL for the receipt of the statements
+	pub receipt_url: ReceiptUrl,
+}
+
+pub type QueuedStatementsInfoOf<T> = QueuedStatementsInfo<
+	BlockNumberFor<T>,
+	StatementsOf<T>,
+	BoundedString<<T as Config>::MaxStringLength>,
+>;

@@ -4,7 +4,7 @@ use frame_support::{parameter_types, weights::Weight};
 use scale_info::TypeInfo;
 use sp_core::{sr25519::Signature, ByteArray, ConstU16, ConstU64, H256};
 use sp_runtime::{
-	testing::{Header, TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	BuildStorage,
 };
@@ -128,7 +128,7 @@ parameter_types! {
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub const MaxStringLength: u32 = 255;
 	/// OCW account
-	pub OcwAccount: AccountId = AccountId::from(Public::from_slice(&[1u8; 32]).unwrap());
+	pub OcwAccount: AccountId = AccountId::from(Public::from_slice(hex_literal::hex!("bcc8880ea4f0aa7c2ab91395da43c465bc2232dd93ac671350258728130d5914").as_ref()).unwrap());
 	/// Bound for statements
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub const MaxStatements: u32 = 255;

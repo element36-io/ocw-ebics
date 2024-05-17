@@ -43,6 +43,8 @@ pub fn unpeg_request<T: Config>(
 	iban: &IbanOf<T>,
 	reference: &str,
 ) -> JsonValue {
+	log::info!("params {:?} {:?} {:?} {:?}", dest, amount, iban, reference);
+
 	// First step is to convert amount to NumberValue type
 	let integer = amount / 10_000_000_000;
 	let fraction = amount % 10_000_000_000;
@@ -71,34 +73,57 @@ pub fn unpeg_request<T: Config>(
 	let iban_json = JsonValue::String(iban[..].iter().map(|b| *b as char).collect::<Vec<char>>());
 
 	JsonValue::Object(vec![
-		("amount".chars().into_iter().collect(), amount_json),
+		("amount".chars().collect(), amount_json),
 		(
-			"clearingSystemMemberId".chars().into_iter().collect(),
+			"clearingSystemMemberId".chars().collect(),
 			JsonValue::String(vec!['H', 'Y', 'P', 'L', 'C', 'H', '2', '2']),
 		),
-		("currency".chars().into_iter().collect(), JsonValue::String(vec!['E', 'U', 'R'])),
-		("nationalPayment".chars().into_iter().collect(), JsonValue::Boolean(true)),
-		(
-			"ourReference".chars().into_iter().collect(),
-			JsonValue::String(reference.chars().into_iter().collect()),
-		),
-		(
-			"purpose".chars().into_iter().collect(),
-			JsonValue::String(dest.chars().into_iter().collect()),
-		),
-		(
-			"receipientBankName".chars().into_iter().collect(),
-			JsonValue::String(vec!['H', 'y', 'p']),
-		),
-		("receipientCity".chars().into_iter().collect(), JsonValue::String(vec!['e'])),
-		("receipientCountry".chars().into_iter().collect(), JsonValue::String(vec!['C', 'H'])),
-		("receipientName".chars().into_iter().collect(), JsonValue::String(vec!['e'])),
-		("receipientIban".chars().into_iter().collect(), iban_json),
-		("receipientStreet".chars().into_iter().collect(), JsonValue::String(vec!['e'])),
-		("receipientStreetNr".chars().into_iter().collect(), JsonValue::String(vec!['2', '5'])),
-		(
-			"receipientZip".chars().into_iter().collect(),
-			JsonValue::String(vec!['6', '3', '4', '0']),
-		),
+		("currency".chars().collect(), JsonValue::String(vec!['E', 'U', 'R'])),
+		("nationalPayment".chars().collect(), JsonValue::Boolean(true)),
+		("ourReference".chars().collect(), JsonValue::String(reference.chars().collect())),
+		("purpose".chars().collect(), JsonValue::String(dest.chars().collect())),
+		("receipientBankName".chars().collect(), JsonValue::String(vec!['H', 'y', 'p'])),
+		("receipientCity".chars().collect(), JsonValue::String(vec!['e'])),
+		("receipientCountry".chars().collect(), JsonValue::String(vec!['C', 'H'])),
+		("receipientName".chars().collect(), JsonValue::String(vec!['e'])),
+		("receipientIban".chars().collect(), iban_json),
+		("receipientStreet".chars().collect(), JsonValue::String(vec!['e'])),
+		("receipientStreetNr".chars().collect(), JsonValue::String(vec!['2', '5'])),
+		("receipientZip".chars().collect(), JsonValue::String(vec!['6', '3', '4', '0'])),
 	])
+}
+
+#[test]
+fn test_unpeg_request() {
+	use crate::mock::new_test_ext;
+
+	new_test_ext().execute_with(|| {
+		let amount = 1_000_000_000_000_u128;
+		// First step is to convert amount to NumberValue type
+		let integer = amount / 10_000_000_000;
+		let fraction = amount % 10_000_000_000;
+
+		// Mutable copy of `fraction` that will be used to calculate length of the fraction
+		let mut fraction_copy = fraction;
+
+		let fraction_length = {
+			let mut len = 0;
+
+			while fraction_copy > 0 {
+				fraction_copy /= 10;
+				len += 1;
+			}
+			len
+		};
+
+		let amount_json = NumberValue {
+			integer: integer as u64,
+			fraction: fraction as u64,
+			fraction_length,
+			exponent: 0,
+			negative: false,
+		};
+
+		println!("{:?}", amount_json.to_f64());
+	});
 }

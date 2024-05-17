@@ -6,11 +6,11 @@ The repository contains a substrate solo chain that is connected to
 an arbitrary bank account which supports
 the EBICS banking interface [(ISO20022)](https://www.iso20022.org/).
 It synchronizes balances and transaction of a bank account with the solo chain
-using an off-chain-worker. This worker also contains extrinsincs to
+using an off-chain-worker and zero-knowledge proofs. This worker also contains extrinsincs to
 trigger wire-transfers on the connected bank account.
 
-Later we want to use Zero-Knowledge proofs to enable trustless atomic swap between 
-FIAT and any ledger technology. The system will be called Hyperfridge - the whitepaper
+Zero-Knowledge proofs are used to enable trustless atomic swap between 
+FIAT and any ledger technology. The system is called Hyperfridge - the whitepaper
 is [here](docs/hyperfridge-draft.pdf).
 
 ### Getting Started
@@ -19,7 +19,9 @@ Our runtime includes a pallet called `fiat-ramps` that is responsible for synchr
 
 `Fiat-ramps` is located inside `/pallets` folder. It is an offchain-worker pallet that primarily does two activities:
 
-- Poll EBICS service to get the latest bank statements and process every transaction
+- Poll EBICS service to get the latest bank statements, puts them in the queue
+- Polls EBICS service for the ZK receipt of the queued statements until it is available
+- Reads the receipt and verifies it
 - Process *burn requests* registered in the local pallet storage and send `unpeg` request to EBICS API.
 
 *Burn request* is a single request to *burn*, *transfer* funds from EBICS supporting bank account using *extrinsics*. Account submits a *request* to a chain and it is registered in the local storage. Offchain worker picks up the burn request and sends it to the EBICS service. If everything goes well, EBICS service confirms the transaction and includes it in the statement, thus *finalizing* the burn request. This is done because transactions in traditional banks are not instant and sometimes it takes days to finalize them.
