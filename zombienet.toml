@@ -1,0 +1,76 @@
+[relaychain]
+default_command = "./bin/polkadot"
+default_args = [ "-lparachain=debug" ]
+chain = "westend-local"
+
+	[[relaychain.nodes]]
+	name = "relay-1"
+	validator = true
+  	extra_args = [ "-lparachain=debug" ]
+
+	[[relaychain.nodes]]
+	name = "relay-2"
+	validator = true
+	extra_args = [ "-lparachain=debug" ]
+
+	[[relaychain.nodes]] 
+	name = "relay-3"
+	validator = true
+	ws_port = 9902
+	extra_args = [ "-lparachain=debug" ]
+
+[[parachains]]
+id = 1000
+chain = "asset-hub-westend-local"
+cumulus_based = true
+add_to_genesis = true
+
+	# run charlie as parachain collator
+	[[parachains.collators]]
+	name = "asset-hub-1"
+	validator = true
+	command = "./bin/polkadot-parachain"
+	args = ["-lxcm=trace"]
+	register_para = true
+
+	# run dave as parachain collator
+	[[parachains.collators]]
+	name = "asset-hub-2"
+	validator = true
+	command = "./bin/polkadot-parachain"
+	args = ["-lxcm=trace"]
+	register_para = true
+
+[[parachains]]
+id = 2000
+cumulus_based = true
+chain = "local"
+add_to_genesis = true
+
+    # run alice as parachain collator
+    [[parachains.collators]]
+    name = "hyperfridge-1"
+    validator = true
+    command = "./target/release/node-template"
+	args = ["-lxcm=trace"]
+	register_para = true
+
+    # run bob as parachain collator
+    [[parachains.collators]]
+    name = "hyperfridge-2"
+    validator = true
+    command = "./target/release/node-template"
+	args = ["-lxcm=trace"]
+	register_para = true
+
+#[[hrmp_channels]]
+#sender = 1000
+#recipient = 2000
+#max_capacity = 5
+#max_message_size = 4096
+
+#[[hrmp_channels]]
+#sender = 2000
+#recipient = 1000
+#max_capacity = 5
+#max_message_size = 4096

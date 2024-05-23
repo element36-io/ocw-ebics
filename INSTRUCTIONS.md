@@ -150,4 +150,3 @@ After we submit extrinsic, we can see that the burn request event is created.
 Shortly after (approximately 3-4 blocks), we can notice that the burn request has been processed and transfer between Alice and Jack occurs. Notice that transfer occurs from an unknown wallet to Jack, not directly from Alice to Jack. This is offchain worker's account that stores the funds until transaction is finalized by LibEUfin backend.
 
 ![Extrinsic from Alice to Jack](/assets/alice-jack-event-zk.png)
- 

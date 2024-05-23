@@ -10,7 +10,7 @@ use sp_std::{vec, vec::Vec};
 pub fn parse_object(key: &str, obj: &[(Vec<char>, lite_json::JsonValue)]) -> JsonValue {
 	let raw_object = obj.iter().find(|(k, _)| k.iter().copied().eq(key.chars()));
 	if let Some((_, v)) = raw_object {
-		return v.clone()
+		return v.clone();
 	}
 	JsonValue::Null
 }
@@ -24,7 +24,7 @@ pub fn extract_value<T: Deserialize<T> + Default>(
 ) -> T {
 	let (_, v) = obj.iter().find(|(k, _)| k.iter().copied().eq(key.chars())).unwrap();
 	if let Some(value) = T::deserialize(v) {
-		return value
+		return value;
 	}
 	Default::default()
 }

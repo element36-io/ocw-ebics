@@ -1,9 +1,7 @@
 ![Unit tests](https://github.com/element36-io/ocw-ebics/actions/workflows/unit-tests.yml/badge.svg)
-# Ebics Off-chain Worker Substrate pallet
+# Hyperfridge Parachain
 
-The repository contains a substrate solo chain that is connected to 
-an arbitrary bank account which supports
-the EBICS banking interface [(ISO20022)](https://www.iso20022.org/).
+The repository contains a substrate parachain that can be connected to an arbitrary bank account which supports the EBICS banking interface [(ISO20022)](https://www.iso20022.org/).
 It synchronizes balances and transaction of a bank account with the solo chain
 using an off-chain-worker and zero-knowledge proofs. This worker also contains extrinsincs to
 trigger wire-transfers on the connected bank account.
@@ -37,41 +35,27 @@ Use the following command to build the node without launching it:
 cargo build --release
 ```
 
-or use Makefile:
-
-```sh
-make build
-```
-
 Note: the above code might take long to compile depending on your machine specs
 
 ## Run
 
-This chain needs EBICS Java service, which is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.
-
-Now start the OCW. The provided `cargo run` command will launch a temporary node and its state will be discarded after
-you terminate the process. After the project has been built, there are other ways to launch the
-node.
+To start the parachain, you should have `zombienet` installed. It is a tool for launching a local parachain network.
 
 ```sh
-cargo run --release --dev --tmp
-
-# or, simply:
-make launch-chain
+zombienet spawn -p native zombienet.toml
 ```
 
 Or you can run the node with consistent state without `--tmp` flag.
 
 ## Tests
 
-To run unit tests for offchain-worker, execute the following command:
+To run unit tests and integration tests, execute the following command:
 
 ```sh
-cargo test -p fiat-ramps
-
-# or, simply:
-make run-tests
+cargo test
 ```
+
+This runs unit tests specific to the `fiat-ramps` pallet and integration tests that test Hyperfridge parachain's AssetHub integration.
 
 ## Linting
 
@@ -79,26 +63,6 @@ To run `clippy` linter, execute the following command:
 
 ```sh
 cargo clippy
-```
-
-### Single-Node Development Chain
-
-This command will start the single-node development chain with persistent state:
-
-```bash
-./target/release/node-template --dev
-```
-
-Purge the development chain's state:
-
-```bash
-./target/release/node-template purge-chain --dev
-```
-
-Start the development chain with detailed logging:
-
-```bash
-RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug --dev
 ```
 
 ### Test bank accounts
@@ -194,3 +158,7 @@ Run:
 ```
 docker run --platform=linux/x86_64 -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
 ```
+
+### Local EBICS Service
+
+This chain needs EBICS Java service, which is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. By default it is connected to a remote EBICS service. If you want to use a local EBICS service, you can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.

@@ -1,6 +1,6 @@
 use crate::{self as fiat_ramps, crypto::Public};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{parameter_types, weights::Weight};
+use frame_support::{derive_impl, parameter_types, weights::Weight};
 use scale_info::TypeInfo;
 use sp_core::{sr25519::Signature, ByteArray, ConstU16, ConstU64, H256};
 use sp_runtime::{
@@ -43,6 +43,7 @@ parameter_types! {
 
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -82,6 +83,7 @@ parameter_types! {
 	pub const MaxLocks: u32 = 50;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig as pallet_balances::DefaultConfig)]
 impl pallet_balances::Config for Test {
 	type MaxLocks = MaxLocks;
 	type MaxReserves = ();
@@ -96,8 +98,8 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Test>;
 	type FreezeIdentifier = [u8; 8];
 	type MaxFreezes = ();
-	type MaxHolds = ();
 	type RuntimeHoldReason = ();
+	type RuntimeFreezeReason = ();
 }
 
 parameter_types! {
@@ -137,7 +139,7 @@ parameter_types! {
 impl fiat_ramps::Config for Test {
 	type AuthorityId = fiat_ramps::crypto::OcwAuthId;
 	type RuntimeEvent = RuntimeEvent;
-	type Currency = Balances;
+	type Stablecoin = Balances;
 	type TimeProvider = Timestamp;
 	type MinimumInterval = MinimumInterval;
 	type UnsignedPriority = UnsignedPriority;
@@ -145,6 +147,7 @@ impl fiat_ramps::Config for Test {
 	type MaxStringLength = MaxStringLength;
 	type OcwAccount = OcwAccount;
 	type MaxStatements = MaxStatements;
+	type XcmInterface = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test

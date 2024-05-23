@@ -24,7 +24,7 @@ pub const API_URL: &[u8; 27] = b"http://localhost:8093/ebics";
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
 /// Balance type
-pub type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
+pub type BalanceOf<T> = <<T as Config>::Stablecoin as Currency<AccountIdOf<T>>>::Balance;
 
 /// String vector
 pub type BoundedString<MaxLength> = BoundedVec<u8, MaxLength>;
@@ -149,3 +149,21 @@ pub type QueuedStatementsInfoOf<T> = QueuedStatementsInfo<
 	StatementsOf<T>,
 	BoundedString<<T as Config>::MaxStringLength>,
 >;
+
+/// Trait for XCM interface
+pub trait XcmInterface<RuntimeOrigin, Balance, AccountId> {
+	/// Mint stablecoin on Asset Hub
+	fn mint(origin: RuntimeOrigin, amount: Balance, dest: AccountId) -> DispatchResult;
+	/// Burn stablecoin on Asset Hub
+	fn burn(origin: RuntimeOrigin, amount: Balance, dest: AccountId) -> DispatchResult;
+}
+
+impl<R, Balance, AccountId> XcmInterface<R, Balance, AccountId> for () {
+	fn mint(_origin: R, _amount: Balance, _dest: AccountId) -> DispatchResult {
+		Ok(())
+	}
+
+	fn burn(_origin: R, _amount: Balance, _dest: AccountId) -> DispatchResult {
+		Ok(())
+	}
+}
