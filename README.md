@@ -47,7 +47,16 @@ Note: the above code might take long to compile depending on your machine specs
 
 ## Run
 
-This chain needs EBICS Java service, which is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.
+This chain needs EBICS Java service to properly work. This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find instructions for running the service [here](https://github.com/element36-io/ebics-java-service/blob/hyperfridge/docs/TEST.md#run-and-test-with-docker):
+
+Or manually, make sure you cloned [`ebics-java-service`](https://github.com/element36-io/ebics-java-service) and switch to `hyperfridge` branch:
+
+```
+docker compose pull
+docker compose up -d
+# optional
+docker compose logs -f
+```
 
 Now start the OCW. The provided `cargo run` command will launch a temporary node and its state will be discarded after
 you terminate the process. After the project has been built, there are other ways to launch the
