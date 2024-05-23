@@ -37,7 +37,16 @@ To get started, obviously make sure you have the necessary setup for Substrate d
 
 ## Ebics Java Service
 
-First, we need to run the EBICS Java service. This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.
+First, we need to run the EBICS Java service. This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find instructions for running the service [here](https://github.com/element36-io/ebics-java-service/blob/hyperfridge/docs/TEST.md#run-and-test-with-docker):
+
+Or manually, make sure you cloned [`ebics-java-service`](https://github.com/element36-io/ebics-java-service) and switch to `hyperfridge` branch:
+
+```
+docker compose pull
+docker compose up -d
+# optional
+docker compose logs -f
+```
 
 ### Image ID
 
