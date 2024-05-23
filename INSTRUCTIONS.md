@@ -59,6 +59,11 @@ Compile and run the node with:
 cargo run --release -- --dev --tmp
 ```
 
+Insert image ID with `fiatRamps::setRisc0ImageId` extrinsic call. This is necessary for offchain worker to know which image to use when running the `riscv0` module. Go to `Sudo` tab and choose `fiatRamps -> setRisc0ImageId` extrinsic and paste the image ID from the previous step, make sure to prepend the image ID with `0x`. Click `Submit transaction`. Sudo account is a development account `Dave`.
+
+<img width="1722" alt="Set Image ID" src="https://github.com/element36-io/ocw-ebics/assets/88332432/c099cd03-4003-4c88-8b24-6099a3145f8f">
+
+
 Open PolkadotJs [interface](https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer) and go to `Developer -> RPC calls` page. Here, we first need to enter keypair for our offchain worker, since it will be signing and submitting transactions to the chain. Choose `author -> insertKey` RPC call and fill out the fields with the following values:
 
 ```js
@@ -66,10 +71,6 @@ key_type: ramp
 suri: cup swing hill dinner pioneer mom stick steel sad raven oak practice
 public_key: 5C555czPfaHgYhKhsRg2KNCLGCJ82jVsvweTHAnfvT83uy5T
 ```
-
-Insert image ID with `fiatRamps::setRisc0ImageId` extrinsic call. This is necessary for offchain worker to know which image to use when running the `riscv0` module. Choose `fiatRamps -> setRisc0ImageId` extrinsic and paste the image ID from the previous step. Click `Submit transaction`.
-
-![Image ID](/assets/image-id.png)
 
 Then, choose `FiatRamps.setApiUrl` extrinsic and paste the new url for the API and click `Submit transaction`. This is only necessary if you have a different URL than the default one with Ebics Java service.
 

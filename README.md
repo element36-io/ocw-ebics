@@ -107,7 +107,7 @@ Following test accounts are for Alice, Bob and Charlie, respectively.
 
 ```json
 {
-  "accounts" : [ {
+  "accounts" : [ { 
     "ownerName" : "Alice",
     "iban" : "CH2108307000289537320",
     "accountId": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
@@ -157,28 +157,40 @@ public_key: 5C555czPfaHgYhKhsRg2KNCLGCJ82jVsvweTHAnfvT83uy5T
 
 You can set the new url for the `ebics-service` via PolkadotJS interface. Follow this link to the `Sudo` [tab](https://polkadot.js.org/apps/#/sudo) and choose `FiatRamps.setApiUrl` extrinsic. Paste the new url for the API and click `Submit transaction`. If everything is good, i.e you are the Sudo account and you have the necessary rights, you should see the transaction included in the block and offchain worker starts querying the new API.
 
-### Run in Docker
+### Run with Docker
+
 
 First, install [Docker](https://docs.docker.com/get-docker/) and
 [Docker Compose](https://docs.docker.com/compose/install/).
 
 Then run the following command to start a single node development chain.
 
-Docker:
+Run with image from DockerHub:
 
 ```bash
-# Ready to use docker image
 docker run -it -p 9944:9944 e36io/ebics-ocw:hyperfridge --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
+```
 
-# Build docker image MacOS (M1)
-docker build --platform linux/x86_64 -t ebics-ocw .
+#### Docker (Linux)
 
-# Build docker image Linux
+Build:
+```
 docker build -t ebics-ocw .
+```
 
-# Run docker image MacOS (M1)
-docker run --platform=linux/x86_64 -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
-
-# Run docker image Linux
+Run:
+```
 docker run -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
+```
+
+#### Docker (MacOS)
+
+Build:
+```
+docker build --platform linux/x86_64 -t ebics-ocw .
+```
+
+Run:
+```
+docker run --platform=linux/x86_64 -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
 ```
