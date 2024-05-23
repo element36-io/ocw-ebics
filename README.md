@@ -47,32 +47,20 @@ Note: the above code might take long to compile depending on your machine specs
 
 ## Run
 
-The OWC needs the backend which connects to the bank account, which is provided by
-[this project](https://github.com/element36-io/ebics-java-service). We run the test version of the API in our own server and it is used as default API url for the offchain worker. However, sudo user can change the API url by submitting an extrinsic. If you want to run your local backend instance:
-
-```sh
-docker run -p 8093:8093 e36io/ebics-service 
-```
-There are some known issues with running the backend on M1 Silicon chips, so use our server if that's the case.
+This chain needs EBICS Java service, which is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.
 
 Now start the OCW. The provided `cargo run` command will launch a temporary node and its state will be discarded after
 you terminate the process. After the project has been built, there are other ways to launch the
 node.
 
 ```sh
-./target/release/node-template --dev --tmp
+cargo run --release --dev --tmp
 
 # or, simply:
 make launch-chain
 ```
 
-You can run the development node with temporary storage:
-
-```sh
-./target/release/node-template --dev --tmp
-# or, simply:
-make launch-chain
-```
+Or you can run the node with consistent state without `--tmp` flag.
 
 ## Tests
 

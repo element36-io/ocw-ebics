@@ -66,11 +66,12 @@ pub fn development_config() -> Result<ChainSpec, String> {
 				// Initial PoA authorities
 				vec![authority_keys_from_seed("Alice")],
 				// Sudo account
-				ocw_account_id.clone(),
+				get_account_id_from_seed::<sr25519::Public>("Dave").clone(),
 				// Pre-funded accounts
 				vec![
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					get_account_id_from_seed::<sr25519::Public>("Bob"),
+					get_account_id_from_seed::<sr25519::Public>("Dave").clone(),
 					ocw_account_id.clone(),
 					demo_account_id.clone(),
 				],
