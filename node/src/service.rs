@@ -218,7 +218,7 @@ async fn start_node_impl(
 				)),
 				network_provider: network.clone(),
 				is_validator: parachain_config.role.is_authority(),
-				enable_http_requests: false,
+				enable_http_requests: true,
 				custom_extensions: move |_| vec![],
 			})
 			.run(client.clone(), task_manager.spawn_handle())
