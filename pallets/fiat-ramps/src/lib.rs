@@ -175,7 +175,10 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub(super) fn DefaultApi<T: Config>() -> StringOf<T> {
-		StringOf::<T>::try_from(API_URL.to_vec())
+		// Hardcoded inital test api endpoint
+		let initial_api = b"http://w.e36.io:8093/ebics";
+
+		StringOf::<T>::try_from(initial_api.to_vec())
 			.expect("Might fail if T::MaxStringLength is less than 33")
 	}
 

@@ -17,9 +17,6 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ramp");
 /// Account id will be derived from this pallet id.
 pub const PALLET_ID: PalletId = PalletId(*b"FiatRamp");
 
-/// Hardcoded inital test api endpoint
-pub const API_URL: &[u8; 27] = b"http://localhost:8093/ebics";
-
 /// Account id of
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 

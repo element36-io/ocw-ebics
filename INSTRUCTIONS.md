@@ -35,10 +35,6 @@ Below is a tutorial that demonstrates how our Substrate solo chain works.
 
 To get started, obviously make sure you have the necessary setup for Substrate development.
 
-## Ebics Java Service
-
-First, we need to run the EBICS Java service. This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.
-
 ### Image ID
 
 And you also need to get the image ID of the `hyperfridge` `riscv0` module. You can get it by running the following command:
@@ -101,7 +97,13 @@ Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> creat
 
 #### Stablecoins are minted to Alice
 
-Stablecoins are minted only when offchain worker detects an incoming transaction from an unknown IBAN address, i.e from an IBAN address is not mapped to any on-chain account address. In order to see how it works in action, head over to the EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). Open `/ebics/api-v1/createOrder` tab and fill out Bob's details. Namely, we will fill `purpose` field with Alice's on-chain account and `receipientIban` field with her IBAN number. Fill out Bob's IBAN from above JSON file as the `sourceIban`. Finally, execute the call. It should look something like this:
+Stablecoins are minted only when offchain worker detects an incoming transaction from an unknown IBAN address, i.e from an IBAN address is not mapped to any on-chain account address. In order to see how it works in action, head over to the EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). Open `/ebics/api-v1/createOrder` tab and fill out Bob's details. Namely, we will fill `purpose` field with Alice's on-chain account and `receipientIban` field with her IBAN number. Fill out Bob's IBAN from above JSON file as the `sourceIban`. Finally, use these values and execute the call:
+```
+amount: 2 (or any other amount)
+purpose: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+receipientIban: CH2108307000289537320
+sourceIban: CH1230116000289537312
+```
 
 ![Alice mints](/assets/ebics-minting-zk.png)
 
@@ -113,7 +115,12 @@ This is how new stablecoins are minted in our chain.
 
 ### Stablecoins are burned from Alice
 
-Now, in order to see how burning works, we can either go to EBICS service again and call `/ebics/api-v1/unpeg` request or submit `fiatRamps.transfer` extrinsic. Let's use EBICS service again, as extrinsic calls are covered in the next demos. After filling up the `recipientIban` field with Bob's IBAN, our call should look like this:
+Now, in order to see how burning works, we can either go to EBICS service again and call `/ebics/api-v1/unpeg` request or submit `fiatRamps.transfer` extrinsic. Let's use EBICS service again, as extrinsic calls are covered in the next demos. After filling up the `recipientIban` field with these values:
+
+```
+amount: 1 (or any other amount)
+receipientIban: CH1230116000289537312
+```
 
 ![Alice burns](/assets/ebics-burning-zk.png)
 
@@ -129,7 +136,14 @@ For this part of the tutorial we will need to map Jack and Bob's IBAN numbers to
 
 It is also very important to know that we can not use PolkadotJS transfer button to move funds in our chain. This would break synchronization between the bank account balance and on-chain balance. In the future it should be disabled and the only way to transfer should be via burn requests.
 
-To make a transfer from Alice to Jack, we head over to our EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). We open `/ebics/api-v1/createOrder` tab and fill out Jack's details. Namely, we will `purpose` field with Jack's on-chain account and `receipientIban` field with his IBAN number. And `sourceIban` field with Alice's IBAN number. We can then specify the amount and other fields. It should look similar to this:
+To make a transfer from Alice to Jack, we head over to our EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). We open `/ebics/api-v1/createOrder` tab and fill out Jack's details. Namely, we will `purpose` field with Jack's on-chain account and `receipientIban` field with his IBAN number. And `sourceIban` field with Alice's IBAN number. We can then specify the amount and other fields:
+
+```
+amount: 1 (or any other amount)
+purpose: 5Hg6mE6QCiqDFH21yjDGe2JSezEZSTn9mBsZa6JsC3wo438c
+receipientIban: CH2108307000289537313
+sourceIban: CH2108307000289537320
+```
 
 ![Alice transfer to Jack](/assets/alice-transfers-jack-zk.png)
 
@@ -143,6 +157,11 @@ Once offchain worker has processed new statements, two `Transfer` events occur:
 
 We go to `Extrinsic` tab, choose `fiatRamps.transfer` extrinsic call and choose `destination` as `Address`. Fill out the necessary fields and make sure that the amount is a positive number and more than 1 UNIT (10 decimals), otherwise extrinsic will fail.
 
+```
+amount: 10000000000
+dest: Address(5Hg6mE6QCiqDFH21yjDGe2JSezEZSTn9mBsZa6JsC3wo438c)
+```
+
 ![Extrinsic from Alice to Jack](/assets/alice-jack-ext-zk.png)
 
 After we submit extrinsic, we can see that the burn request event is created.
@@ -150,3 +169,20 @@ After we submit extrinsic, we can see that the burn request event is created.
 Shortly after (approximately 3-4 blocks), we can notice that the burn request has been processed and transfer between Alice and Jack occurs. Notice that transfer occurs from an unknown wallet to Jack, not directly from Alice to Jack. This is offchain worker's account that stores the funds until transaction is finalized by LibEUfin backend.
 
 ![Extrinsic from Alice to Jack](/assets/alice-jack-event-zk.png)
+
+## Ebics Java Service (Optional)
+
+You don't need to run the EBICS Java service, since we use the hosted version [at](http://w.e36.io:8093/ebics). However, if you want to run it locally, you can do so by following the instructions below.
+
+This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find instructions for running the service [here](https://github.com/element36-io/ebics-java-service/blob/hyperfridge/docs/TEST.md#run-and-test-with-docker):
+
+Or manually, make sure you cloned [`ebics-java-service`](https://github.com/element36-io/ebics-java-service) and switch to `hyperfridge` branch:
+
+```
+docker compose pull
+docker compose up -d
+# optional
+docker compose logs -f
+```
+
+Then, you should do a sudo extrinsic `fiatRamps.setApiUrl` and set the new URL to `http://localhost:8093/ebics`. This will make sure that offchain worker is querying the correct API.

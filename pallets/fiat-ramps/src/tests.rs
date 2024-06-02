@@ -47,7 +47,7 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 	let (response_bytes, parsed_response) =
 		get_mock_response::<Test>(response_type.clone(), statement_type.clone());
 
-	let statements_endpoint = "http://localhost:8093/ebics/api-v1/bankstatements".to_string();
+	let statements_endpoint = "http://w.e36.io:8093/ebics/api-v1/bankstatements".to_string();
 
 	ebics_server_response(
 		&mut state.write(),
@@ -150,7 +150,7 @@ fn should_make_http_call_and_parse() {
 		StatementTypes::IncomingTransactions,
 	);
 
-	let statements_endpoint = "http://localhost:8093/ebics/api-v1/bankstatements".to_string();
+	let statements_endpoint = "http://w.e36.io:8093/ebics/api-v1/bankstatements".to_string();
 
 	ebics_server_response(
 		&mut state.write(),
@@ -257,7 +257,7 @@ fn test_verify_queued_statements_works() {
 		StatementTypes::OutgoingTransactions,
 	);
 
-	let statements_endpoint = "http://localhost:8093/ebics/api-v1/bankstatements".to_string();
+	let statements_endpoint = "http://w.e36.io:8093/ebics/api-v1/bankstatements".to_string();
 
 	ebics_server_response(
 		&mut state.write(),
@@ -272,7 +272,7 @@ fn test_verify_queued_statements_works() {
 
 	let (receipt_response_bytes, _receipt_response) = get_mock_receipt();
 
-	let receipt_endpoint = "http://localhost:8093/ebics/abcd.json".to_string();
+	let receipt_endpoint = "http://w.e36.io:8093/ebics/abcd.json".to_string();
 
 	ebics_server_response(
 		&mut state.write(),
@@ -426,7 +426,7 @@ fn test_burn_request() {
 		)
 		.serialize();
 
-		let unpeg_endpoint = "http://localhost:8093/ebics/api-v1/unpeg";
+		let unpeg_endpoint = "http://w.e36.io:8093/ebics/api-v1/unpeg";
 
 		ebics_server_response(
 			&mut state.write(),
