@@ -2,9 +2,9 @@
 
 This document describes in-depth how our chain functions and how to test it out.
 
-## Fiat on/off ramp workflow
+## Hyperfridge workflow
 
-FiatRamps is a chain that aims to connect EBICS banking interface to Polkadot ecosystem. In order to accomplish it, we utilise Substrate offchain-workers. With the help of offchain-workers, our node syncs with our EBICS server and EBICS Java service. And with mapping our bank account to an `account` chain, we get an easy way to ramp on and off from chain.
+Hyperfridge is a chain that aims to connect EBICS banking interface to Polkadot ecosystem. In order to accomplish it, we utilise Substrate offchain-workers. With the help of offchain-workers, our node syncs with our EBICS server and EBICS Java service. And with mapping our bank account to an `account` chain, we get an easy way to ramp on and off from chain.
 
 Below is the workflow for easily ramping on and off to our chain:
 
@@ -35,7 +35,93 @@ Below is a tutorial that demonstrates how our Substrate solo chain works.
 
 To get started, obviously make sure you have the necessary setup for Substrate development.
 
-### Image ID
+## Setup Zombienet
+
+You should have [`zombienet`](https://github.com/paritytech/zombienet) installed, at least version `1.3.104`.
+
+Compile the node:
+
+```bash
+cargo build --release
+```
+
+Then, since Hyperfridge is a parachain, it requires a local network which consists of a relay chain and Asset Hub for XCM compatibility. You will need a compiled `polkadot` and `polkadot-parachain` binaries. Check out `polkadot-sdk` and:
+
+Build `polkadot`:
+```
+cd polkadot && cargo install --path . --locked --features fast-runtime
+```
+`fast-runtime` feature is important, because otherwise you will have to wait a long time until `parachains` start producing blocks.
+
+And then `polkadot-parachain` binary for `Asset Hub`:
+
+```
+cargo build --release --locked -p polkadot-parachain-bin --bin polkadot-parachain
+```
+
+And now, you should point path to those binaries in ENV variables:
+
+```
+export POLKADOT_BIN=/path/to/polkadot
+export ASSET_HUB_BIN=/path/to/polkadot-parachain
+```
+
+Finally:
+
+```
+zombienet spawn -p native zombienet.toml
+```
+
+The log will print `Polkadot.js` links to all nodes.
+
+## Demo
+
+### Prepare XCM
+
+#### HRMP Channels
+First of all, we should have `hrmp` channels open between two parachains. For this, we dispatch a `Sudo` call from relaychain `hrmp.ForceOpenHrmpChannel`:
+
+<img width="1706" alt="Screenshot 2024-06-02 at 23 17 50" src="https://github.com/element36-io/ocw-ebics/assets/88332432/9b92af9b-36a1-4c9e-a78c-924f838891a8">
+
+This opens a channel from `Hyperfridge` to `AssetHub`, change the values of `sender` and `recipient` to open the channel in other direction, and submit the extrinsic.
+
+Now, another key thing for the demo is the registration of `Hyperfridge` pEURO stablecoin on Asset Hub. For this, we also need to dispatch a sudo call from relay chain that registers the foreign asset and sets it as a sufficient asset. Sufficiency of the stablecoin is important, because we need to be able to pay transaction fees and satisfy existential deposit with it.
+
+First, go to `Asset Hub` extrinsics tab and fill it with these values:
+
+<img width="1380" alt="Screenshot 2024-06-03 at 2 30 14" src="https://github.com/element36-io/ocw-ebics/assets/88332432/2322d767-014b-497b-aee4-58931853bfbb">
+
+Here, location of the asset is our `Hyperfridge` chain with `2000` para ID and admin is the sovereign account of our parachain in `Asset Hub`. Also, make sure to set a positive value for minimum balance. Do not dispatch the extrinsic, just copy the `encoded data` of the call.
+
+And in the transfer tab, send some funds to sovereign account of relay chain in `Asset Hub` (`5Dt6dpkWPwLaH4BBCKJwjiWrFVAGyYk3tLUabvyn4v7KtESG`):
+
+<img width="735" alt="Screenshot 2024-06-03 at 2 35 36" src="https://github.com/element36-io/ocw-ebics/assets/88332432/f7740602-e216-47e0-a9b6-cbd78627a9e5">
+
+#### Foreign assets creation
+
+Head over to relay chain and send a `Transact` XCM message wrapped in `Sudo` to the `Asset Hub`:
+
+<img width="1163" alt="Screenshot 2024-06-03 at 2 36 30" src="https://github.com/element36-io/ocw-ebics/assets/88332432/67dde2bd-6b67-4325-b2ed-4d0426051834">
+
+The values can be easily confused, so these are common values that you can copy:
+
+```
+WITHDRAW and BUY_EXECUTION amount is 1 UNIT: 1000000000000 and to be paid in WND currency, hence MultiLocation { Parents: 1, Interior: Here }
+Safe weight values for TRANSACT: Weight { ref_time: 500000000000, proof_size: 60000 }
+Relay chain sovereign account in Asset Hub: 5Dt6dpkWPwLaH4BBCKJwjiWrFVAGyYk3tLUabvyn4v7KtESG
+Hyperfridge sovereign account in Asset Hub: 5Eg2fntJ27qsari4FGrGhrMqKFDRnkNSR6UshkZYBGXmSuC8
+Transact OriginKind should be SUPERUSER, this is extra important.
+```
+
+<img width="825" alt="Screenshot 2024-06-03 at 2 45 32" src="https://github.com/element36-io/ocw-ebics/assets/88332432/2f83958c-9c3a-43c6-b8dc-1dc398cdab59">
+
+Submit the sudo call, and this should be the last step of preparation. If succesfull, you will see this in the `Asset Hub` explorer:
+
+<img width="1142" alt="Screenshot 2024-06-03 at 2 47 06" src="https://github.com/element36-io/ocw-ebics/assets/88332432/a8c76491-2938-443e-8fc1-6f7a9a9d4f41">
+
+### Hyperfridge
+
+#### Image ID
 
 And you also need to get the image ID of the `hyperfridge` `riscv0` module. You can get it by running the following command:
 
@@ -47,18 +133,9 @@ dcaba464d4909890d6638dd14e7a25853a8dd2cad14639d0d310987b32a43957
 
 Copy that image ID and pass it to the sudo extrinsic when the chain is running.
 
-## Demo
-
-Compile and run the node with:
-
-```bash
-cargo run --release -- --dev --tmp
-```
-
 Insert image ID with `fiatRamps::setRisc0ImageId` extrinsic call. This is necessary for offchain worker to know which image to use when running the `riscv0` module. Go to `Sudo` tab and choose `fiatRamps -> setRisc0ImageId` extrinsic and paste the image ID from the previous step, make sure to prepend the image ID with `0x`. Click `Submit transaction`. Sudo account is a development account `Dave`.
 
 <img width="1722" alt="Set Image ID" src="https://github.com/element36-io/ocw-ebics/assets/88332432/c099cd03-4003-4c88-8b24-6099a3145f8f">
-
 
 Open PolkadotJs [interface](https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer) and go to `Developer -> RPC calls` page. Here, we first need to enter keypair for our offchain worker, since it will be signing and submitting transactions to the chain. Choose `author -> insertKey` RPC call and fill out the fields with the following values:
 
@@ -94,6 +171,13 @@ Once you have submitted the call, head over to `Extrinsics -> fiatRamps -> creat
 `Jack's` IBAN comes mapped in genesis, so we don't need to map it again.
 
 ![Alice connecting her bank account](/assets/alice-map-account.png)
+
+### Stablecoin pallet
+
+Stablecoin pallet is just another instance of `pallet_balances` and it is a representation of the stable coin that is on/off ramped from the EBICS banking interface. So, in order to check your allowance, you have to check from `Chain State` and `stableCoin.Accounts`:
+
+<img width="1347" alt="Screenshot 2024-06-03 at 3 40 39" src="https://github.com/element36-io/ocw-ebics/assets/88332432/1464240e-1a37-4148-8e97-bde4e7da057a">
+
 
 #### Stablecoins are minted to Alice
 
@@ -169,6 +253,28 @@ After we submit extrinsic, we can see that the burn request event is created.
 Shortly after (approximately 3-4 blocks), we can notice that the burn request has been processed and transfer between Alice and Jack occurs. Notice that transfer occurs from an unknown wallet to Jack, not directly from Alice to Jack. This is offchain worker's account that stores the funds until transaction is finalized by LibEUfin backend.
 
 ![Extrinsic from Alice to Jack](/assets/alice-jack-event-zk.png)
+
+#### Alice teleports stable coin to Asset Hub
+
+Go to Extrinsics tab and submit `teleportToAssetHub` extrinsic:
+
+<img width="1365" alt="Screenshot 2024-06-03 at 3 42 37" src="https://github.com/element36-io/ocw-ebics/assets/88332432/7777590f-df20-4cb6-afbc-e8c4eec6a563">
+
+Head over to `Asset Hub` explorer and watch until the tokens are minted:
+
+<img width="1365" alt="Screenshot 2024-06-03 at 3 43 22" src="https://github.com/element36-io/ocw-ebics/assets/88332432/1b3c0783-83b1-4249-85ea-b0207a9d73cc">
+
+#### Alice teleports back to Hyperfridge to Bob
+
+In `Asset Hub`, check Alice balance in `foreignAssets.account` (you can use this balance to send it back in the next step):
+
+<img width="1156" alt="Screenshot 2024-06-03 at 3 46 56" src="https://github.com/element36-io/ocw-ebics/assets/88332432/054fd2f5-4e7e-4ffd-80bb-507f3a517302">
+
+Since there is no wrapper extrinsic on `Asset Hub` we need to manually send the tokens via `polkadotXcm.teleportAssets`:
+
+<img width="869" alt="Screenshot 2024-06-03 at 3 50 17" src="https://github.com/element36-io/ocw-ebics/assets/88332432/4b0e3f7d-70f3-4750-b036-84c7b8a38c93">
+
+And, obviously, head back to `Hyperfridge` explorer and notice that tokens are minted back.
 
 ## Ebics Java Service (Optional)
 
