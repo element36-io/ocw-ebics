@@ -22,3 +22,5 @@ subalfred
 
 # bin
 bin/
+
+.env

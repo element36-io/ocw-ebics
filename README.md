@@ -39,11 +39,44 @@ Note: the above code might take long to compile depending on your machine specs
 
 ## Run
 
-To start the parachain, you should have `zombienet` installed. It is a tool for launching a local parachain network.
+## Setup Zombienet
 
-```sh
+You should have [`zombienet`](https://github.com/paritytech/zombienet) installed, at least version `1.3.104`.
+
+Compile the node:
+
+```bash
+cargo build --release
+```
+
+Then, since Hyperfridge is a parachain, it requires a local network which consists of a relay chain and Asset Hub for XCM compatibility. You will need a compiled `polkadot` and `polkadot-parachain` binaries. Check out `polkadot-sdk` and:
+
+Build `polkadot`:
+```
+cd polkadot && cargo install --path . --locked --features fast-runtime
+```
+`fast-runtime` feature is important, because otherwise you will have to wait a long time until `parachains` start producing blocks.
+
+And then `polkadot-parachain` binary for `Asset Hub`:
+
+```
+cargo build --release --locked -p polkadot-parachain-bin --bin polkadot-parachain
+```
+
+And now, you should point path to those binaries in ENV variables:
+
+```
+export POLKADOT_BIN=/path/to/polkadot
+export ASSET_HUB_BIN=/path/to/polkadot-parachain
+```
+
+Finally:
+
+```
 zombienet spawn -p native zombienet.toml
 ```
+
+The log will print `Polkadot.js` links to all nodes.
 
 Or you can run the node with consistent state without `--tmp` flag.
 

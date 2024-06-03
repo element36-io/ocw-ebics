@@ -1,5 +1,5 @@
 [relaychain]
-default_command = "./bin/polkadot"
+default_command = "{{POLKADOT_BIN}}"
 default_args = [ "-lparachain=debug" ]
 chain = "westend-local"
 
@@ -29,7 +29,7 @@ add_to_genesis = true
 	[[parachains.collators]]
 	name = "asset-hub-1"
 	validator = true
-	command = "./bin/polkadot-parachain"
+	command = "{{ASSET_HUB_BIN}}"
 	args = ["-lxcm=trace"]
 	register_para = true
 
@@ -37,7 +37,7 @@ add_to_genesis = true
 	[[parachains.collators]]
 	name = "asset-hub-2"
 	validator = true
-	command = "./bin/polkadot-parachain"
+	command = "{{ASSET_HUB_BIN}}"
 	args = ["-lxcm=trace"]
 	register_para = true
 

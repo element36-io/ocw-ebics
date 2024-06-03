@@ -35,6 +35,7 @@ use cumulus_primitives_core::{AggregateMessageOrigin, ParaId, XcmpMessageFormat}
 use frame_support::{
 	construct_runtime, derive_impl,
 	genesis_builder_helper::{build_config, create_default_config},
+	pallet_prelude::*,
 	parameter_types,
 	traits::{
 		ConstBool, ConstU32, ConstU64, ConstU8, EitherOfDiverse, StorageMapShim, TransformOrigin,
@@ -247,8 +248,14 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
+pub const WEIGHT_REF_TIME_PER_NANOS: u64 = 1_000;
+pub const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(15);
+
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
+	/// Importing a block with 0 Extrinsics.
+	pub const BlockExecutionWeight: Weight =
+	Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(5_000_000), 0);
 
 	// This part is copied from Substrate's `bin/node/runtime/src/lib.rs`.
 	//  The `RuntimeBlockLength` and `RuntimeBlockWeights` exist here because the
@@ -256,7 +263,24 @@ parameter_types! {
 	// the lazy contract deletion.
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
-		pub RuntimeBlockWeights: BlockWeights = BlockWeights::with_sensible_defaults(MAXIMUM_BLOCK_WEIGHT, NORMAL_DISPATCH_RATIO);
+	pub RuntimeBlockWeights: BlockWeights = BlockWeights::builder()
+		.base_block(BlockExecutionWeight::get())
+		.for_class(DispatchClass::all(), |weights| {
+			weights.base_extrinsic = ExtrinsicBaseWeight::get();
+		})
+		.for_class(DispatchClass::Normal, |weights| {
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT);
+		})
+		.for_class(DispatchClass::Operational, |weights| {
+			weights.max_total = Some(MAXIMUM_BLOCK_WEIGHT);
+			// Operational transactions have some extra reserved space, so that they
+			// are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
+			weights.reserved = Some(
+				MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT
+			);
+		})
+		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
+		.build_or_panic();
 	pub const SS58Prefix: u16 = 42;
 }
 
@@ -402,7 +426,7 @@ impl cumulus_pallet_parachain_system::Config for Runtime {
 impl staging_parachain_info::Config for Runtime {}
 
 parameter_types! {
-	pub MessageQueueServiceWeight: Weight = Perbill::from_percent(35) * RuntimeBlockWeights::get().max_block;
+	pub MessageQueueServiceWeight: Weight = Perbill::from_percent(60) * RuntimeBlockWeights::get().max_block;
 }
 
 impl pallet_message_queue::Config for Runtime {
