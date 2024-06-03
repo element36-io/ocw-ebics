@@ -1,9 +1,7 @@
 ![Unit tests](https://github.com/element36-io/ocw-ebics/actions/workflows/unit-tests.yml/badge.svg)
-# Ebics Off-chain Worker Substrate pallet
+# Hyperfridge Parachain
 
-The repository contains a substrate solo chain that is connected to 
-an arbitrary bank account which supports
-the EBICS banking interface [(ISO20022)](https://www.iso20022.org/).
+The repository contains a substrate parachain that can be connected to an arbitrary bank account which supports the EBICS banking interface [(ISO20022)](https://www.iso20022.org/).
 It synchronizes balances and transaction of a bank account with the solo chain
 using an off-chain-worker and zero-knowledge proofs. This worker also contains extrinsincs to
 trigger wire-transfers on the connected bank account.
@@ -37,50 +35,60 @@ Use the following command to build the node without launching it:
 cargo build --release
 ```
 
-or use Makefile:
-
-```sh
-make build
-```
-
 Note: the above code might take long to compile depending on your machine specs
 
 ## Run
 
-This chain needs EBICS Java service to properly work. This service is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. You can find instructions for running the service [here](https://github.com/element36-io/ebics-java-service/blob/hyperfridge/docs/TEST.md#run-and-test-with-docker):
+## Setup Zombienet
 
-Or manually, make sure you cloned [`ebics-java-service`](https://github.com/element36-io/ebics-java-service) and switch to `hyperfridge` branch:
+You should have [`zombienet`](https://github.com/paritytech/zombienet) installed, at least version `1.3.104`.
+
+Compile the node:
+
+```bash
+cargo build --release
+```
+
+Then, since Hyperfridge is a parachain, it requires a local network which consists of a relay chain and Asset Hub for XCM compatibility. You will need a compiled `polkadot` and `polkadot-parachain` binaries. Check out `polkadot-sdk` and:
+
+Build `polkadot`:
+```
+cd polkadot && cargo install --path . --locked --features fast-runtime
+```
+`fast-runtime` feature is important, because otherwise you will have to wait a long time until `parachains` start producing blocks.
+
+And then `polkadot-parachain` binary for `Asset Hub`:
 
 ```
-docker compose pull
-docker compose up -d
-# optional
-docker compose logs -f
+cargo build --release --locked -p polkadot-parachain-bin --bin polkadot-parachain
 ```
 
-Now start the OCW. The provided `cargo run` command will launch a temporary node and its state will be discarded after
-you terminate the process. After the project has been built, there are other ways to launch the
-node.
+And now, you should point path to those binaries in ENV variables:
 
-```sh
-cargo run --release --dev --tmp
-
-# or, simply:
-make launch-chain
 ```
+export POLKADOT_BIN=/path/to/polkadot
+export ASSET_HUB_BIN=/path/to/polkadot-parachain
+```
+
+Finally:
+
+```
+zombienet spawn -p native zombienet.toml
+```
+
+The log will print `Polkadot.js` links to all nodes.
 
 Or you can run the node with consistent state without `--tmp` flag.
 
 ## Tests
 
-To run unit tests for offchain-worker, execute the following command:
+To run unit tests and integration tests, execute the following command:
 
 ```sh
-cargo test -p fiat-ramps
-
-# or, simply:
-make run-tests
+cargo test
 ```
+
+This runs unit tests specific to the `fiat-ramps` pallet and integration tests that test Hyperfridge parachain's AssetHub integration.
 
 ## Linting
 
@@ -88,26 +96,6 @@ To run `clippy` linter, execute the following command:
 
 ```sh
 cargo clippy
-```
-
-### Single-Node Development Chain
-
-This command will start the single-node development chain with persistent state:
-
-```bash
-./target/release/node-template --dev
-```
-
-Purge the development chain's state:
-
-```bash
-./target/release/node-template purge-chain --dev
-```
-
-Start the development chain with detailed logging:
-
-```bash
-RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug --dev
 ```
 
 ### Test bank accounts
@@ -203,3 +191,7 @@ Run:
 ```
 docker run --platform=linux/x86_64 -it -p 9944:9944 ebics-ocw:latest --dev --tmp --unsafe-rpc-external --rpc-cors=all --rpc-methods=unsafe -loffchain-worker
 ```
+
+### Local EBICS Service
+
+This chain needs EBICS Java service, which is responsible for connecting to the bank account and providing an API for our offchain worker to interact with. By default it is connected to a remote EBICS service. If you want to use a local EBICS service, you can find the service [here](https://github.com/element36-io/ebics-java-service). Follow the instructions in the README to run the service.

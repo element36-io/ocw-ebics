@@ -70,7 +70,7 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 				// No transactions should be sent for empty statement
 				assert!(pool_state.read().transactions.is_empty());
 			},
-			ResponseTypes::SingleStatement | ResponseTypes::MultipleStatements =>
+			ResponseTypes::SingleStatement | ResponseTypes::MultipleStatements => {
 				match statement_type {
 					StatementTypes::InvalidTransactions => {
 						assert_noop!(
@@ -100,7 +100,8 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 							.into()
 						);
 					},
-				},
+				}
+			},
 		}
 	})
 }

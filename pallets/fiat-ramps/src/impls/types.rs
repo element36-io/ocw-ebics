@@ -1,10 +1,5 @@
-//! Implementations of traits and types for the pallet
-use core::convert::TryInto;
-
-use crate::{types::*, *};
-use sp_std::default::Default;
-
-use self::utils::{extract_value, parse_object};
+//! Impls for various types
+use super::*;
 
 impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
 	fn public(&self) -> T::Public {
