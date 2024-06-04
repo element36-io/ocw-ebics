@@ -110,7 +110,7 @@ pub type XcmOriginToTransactDispatchOrigin = (
 parameter_types! {
 	pub const Stablecoin: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(MultiLocation::here()) });
 	// One XCM operation is 1_000_000_000 weight - almost certainly a conservative estimate.
-	pub UnitWeightCost: Weight = Weight::from_parts(1_000_000, 1024 * 1024);
+	pub UnitWeightCost: Weight = Weight::from_parts(1_000_000, 64 * 1024);
 	pub const MaxInstructions: u32 = 100;
 	pub const MaxAssetsIntoHolding: u32 = 64;
 	pub AssetHubTrustedTeleporter: (AssetFilter, MultiLocation) = (Stablecoin::get(), AssetHubLocation::get());
