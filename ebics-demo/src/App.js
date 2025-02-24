@@ -11,6 +11,7 @@ import { DeveloperConsole } from './substrate-lib/components'
 import AccountSelector from './AccountSelector'
 import FiatRampsModule from './FiatRampsModule'
 import TransferTx from './TransferTx'
+import ProofDownloadModule from './ProofDownload'
 
 function Main() {
   const { apiState, apiError, keyringState } = useSubstrateState()
@@ -60,6 +61,9 @@ function Main() {
             <TransferTx />
           </Grid.Row>
         </Grid>
+        <Grid.Row>
+            <ProofDownloadModule />
+          </Grid.Row>
       </Container>
       <DeveloperConsole />
     </div>
