@@ -2,7 +2,11 @@ import React, { createRef } from 'react'
 import 'semantic-ui-css/semantic.min.css'
 import {
   Container,
-  Dimmer, Grid, Loader, Message, Sticky
+  Dimmer,
+  Grid,
+  Loader,
+  Message,
+  Sticky,
 } from 'semantic-ui-react'
 
 import { SubstrateContextProvider, useSubstrateState } from './substrate-lib'
@@ -11,6 +15,7 @@ import { DeveloperConsole } from './substrate-lib/components'
 import AccountSelector from './AccountSelector'
 import FiatRampsModule from './FiatRampsModule'
 import TransferTx from './TransferTx'
+// import ProofDownloadModule from './ProofDownload'
 
 function Main() {
   const { apiState, apiError, keyringState } = useSubstrateState()
@@ -60,6 +65,9 @@ function Main() {
             <TransferTx />
           </Grid.Row>
         </Grid>
+        <Grid.Row>
+          <ProofDownloadModule />
+        </Grid.Row>
       </Container>
       <DeveloperConsole />
     </div>

@@ -16,7 +16,10 @@ use parachains_common::impls::AssetsFrom;
 use polkadot_parachain_primitives::primitives::Sibling;
 use sp_core::Get;
 use sp_std::{marker::PhantomData, sync::Arc, vec};
-use staging_xcm::latest::{prelude::*, Junctions::X1, Location as MultiLocation};
+use staging_xcm::{
+	latest::{prelude::*, Junctions::X1, Location as MultiLocation},
+	opaque::latest::WESTEND_GENESIS_HASH,
+};
 use staging_xcm_builder::WithUniqueTopic;
 #[allow(deprecated)]
 use staging_xcm_builder::{
@@ -33,7 +36,7 @@ parameter_types! {
 	pub const RelayLocation: MultiLocation = MultiLocation::parent();
 	pub const OurLocation: MultiLocation = MultiLocation::here();
 	pub AssetHubLocation: MultiLocation = MultiLocation::new(1, X1(Arc::new([Parachain(1000)])));
-	pub const RelayNetwork: Option<NetworkId> = Some(NetworkId::Westend);
+	pub const RelayNetwork: Option<NetworkId> = Some(NetworkId::ByGenesis(WESTEND_GENESIS_HASH));
 	pub RelayChainOrigin: RuntimeOrigin = cumulus_pallet_xcm::Origin::Relay.into();
 	pub UniversalLocation: InteriorLocation = Parachain(ParachainInfo::parachain_id().into()).into();
 }
@@ -199,6 +202,10 @@ impl staging_xcm_executor::Config for XcmConfig {
 	type SafeCallFilter = Everything;
 	type Aliasers = Nothing;
 	type TransactionalProcessor = FrameTransactionalProcessor;
+	type HrmpNewChannelOpenRequestHandler = ();
+	type HrmpChannelAcceptedHandler = ();
+	type HrmpChannelClosingHandler = ();
+	type XcmRecorder = PolkadotXcm;
 }
 
 /// No local origins on this chain are allowed to dispatch XCM sends/executions.
@@ -275,8 +282,8 @@ where
 			sp_std::boxed::Box::new(
 				MultiLocation {
 					parents: 0,
-					interior: staging_xcm::lts::Junction::AccountId32 {
-						network: Some(NetworkId::Westend),
+					interior: staging_xcm::latest::Junction::AccountId32 {
+						network: Some(NetworkId::ByGenesis(WESTEND_GENESIS_HASH)),
 						id: dest.into(),
 					}
 					.into(),

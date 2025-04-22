@@ -10,39 +10,21 @@ This demo is a decentralized application that allows users to buy someone a coff
 
 To get started, obviously make sure you have the necessary setup for Substrate development. Go through the main [README.md](../README.md) file to get started.
 
-### Makefile
-
-Makefile configuration is provided for convenience. You can use it to build the chain and the frontend, as well as to run the chain and the frontend in development mode.
-
-Run both:
-
-```bash
-make launch-demo-app
-```
-
-Run only the chain:
-
-```bash
-make launch-chain
-```
-
-### Chain
-
-If you prefer to not use the Makefile, you can run the setup manually.
-
-Start the chain in development mode with:
-```bash
-cargo run --release -- --dev --tmp
-```
 
 ### Frontend
 
 To run the website, go through it's [README.md](./README.md) file.
 
+Make sure to set the `PROVIDER_SOCKET` in `src/config/production.json` to one of the collator nodes from `zombienet`, for example:
+
+```bash
+export REACT_APP_PROVIDER_SOCKET=ws://127.0.0.1:50999
+```
+
 In another terminal, start the frontend with:
 
 ```bash
-yarn start
+yarn run start
 ```
 
 ### Offchain worker key
@@ -137,6 +119,14 @@ Once you have selected Jack's account, you can see that `Withdraw` is now availa
 Once you click the `Withdraw` button, you will see the status of the transaction below the form. And once the transaction is processed, you will see that the total donations have decreased.
 
 ![Withdraw success](./assets/jack-withdraw-success.png)
+
+### Getting ZK proof of bank statement
+
+You can also get a ZK proof of your bank statement and verify it yourself. To do that, you can select Jack's account from the top right corner, if you haven't added Jack's wallet to your `Polkadot.js` extension, please do it using the seed from the above mapping.
+
+![Get proof](./assets/jack-get-proof.png)
+Once you have selected Jack's account, you can see that `Get proof` is now available in transfer destination options. Select `Get proof` and it will generate a ZK proof of Jack's bank statement after couple of seconds.
+
 
 ## Conclusion
 
