@@ -51,7 +51,7 @@ add_to_genesis = true
     [[parachains.collators]]
     name = "hyperfridge-1"
     validator = true
-    command = "./target/release/node-template"
+    command = "~/.cargo/target/release/node-template"
 	args = ["-lxcm=trace"]
 	register_para = true
 
@@ -59,7 +59,7 @@ add_to_genesis = true
     [[parachains.collators]]
     name = "hyperfridge-2"
     validator = true
-    command = "./target/release/node-template"
+    command = "~/.cargo/target/release/node-template"
 	args = ["-lxcm=trace"]
 	register_para = true
 

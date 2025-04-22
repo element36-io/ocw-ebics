@@ -7,7 +7,7 @@ description = "An offchain-worker pallet to communicate with EBICS services"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-lite-json = { git = "https://github.com/xlc/lite-json.git", branch ="master", default-features = false }
+lite-json = { git = "https://github.com/xlc/lite-json.git", branch = "master", default-features = false }
 log = { version = "0.4.17", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
@@ -15,40 +15,40 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
 # Substrate packages
-frame-system = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
-frame-support = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
-sp-keystore = { git = "https://github.com/paritytech/polkadot-sdk.git", optional = true, branch = "release-polkadot-v1.9.0" }
-sp-std = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
-sp-runtime = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
-sp-core = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0", features = ["serde"] }
-sp-io = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
-pallet-sudo = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
+frame-system = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
+frame-support = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
+sp-keystore = { git = "https://github.com/paritytech/polkadot-sdk.git", optional = true, branch = "stable2412" }
+sp-std = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
+sp-runtime = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
+sp-core = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412", features = ["serde"] }
+sp-io = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
+pallet-sudo = { default-features = false, git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
 risc0-zkvm = { version = "0.20.1", default-features = false }
 serde-json-core = { version = "0.5.1", default-features = false }
 
 [dev-dependencies]
-pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
-pallet-timestamp = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "release-polkadot-v1.9.0" }
+pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
+pallet-timestamp = { git = "https://github.com/paritytech/polkadot-sdk.git", branch = "stable2412" }
 hex-literal = "0.4.1"
 
 [features]
-default = ['std']
+default = [ 'std' ]
 std = [
+	'codec/std',
 	'frame-support/std',
 	'frame-system/std',
-	'codec/std',
+	'lite-json/std',
+	'log/std',
+	'pallet-balances/std',
+	'pallet-sudo/std',
+	'pallet-timestamp/std',
+	"risc0-zkvm/std",
 	'scale-info/std',
+	'serde-json-core/std',
+	'sp-core/std',
+	'sp-io/std',
+	'sp-keystore',
 	'sp-runtime/std',
 	'sp-std/std',
-	'sp-io/std',
-	'log/std',
-	'lite-json/std',
-	'sp-core/std',
-	'sp-keystore',
-	'pallet-balances/std',
-	'pallet-timestamp/std',
-	'pallet-sudo/std',
-	'serde-json-core/std',
-	"risc0-zkvm/std",
 ]
 risc0-dev-mode = []
