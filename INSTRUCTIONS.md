@@ -134,9 +134,13 @@ yarn && yarn start
 
 Go to http://localhost:8000/proofs and you will see empty statements:
 
+<img width="1516" height="881" alt="Screenshot 2025-09-27 at 01 28 12" src="https://github.com/user-attachments/assets/925f0a98-c035-4119-82c9-8f9f63bda889" />
+
 For new statement to appear, we need to trigger a transfer. The easiest way is by creating an order in the Swagger UI for EBICS API. Simply repeat the step at [Stablecoins are minted to Alice] section below.
 
 Then you can download the proofs as json:
+
+<img width="1516" height="881" alt="Screenshot 2025-09-27 at 01 28 50" src="https://github.com/user-attachments/assets/973642e6-8227-4dfc-bfa0-87279727fc2d" />
 
 #### Image ID
 
