@@ -8,6 +8,7 @@ import {
   Message,
   Sticky,
 } from 'semantic-ui-react'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 
 import { SubstrateContextProvider, useSubstrateState } from './substrate-lib'
 import { DeveloperConsole } from './substrate-lib/components'
@@ -15,7 +16,7 @@ import { DeveloperConsole } from './substrate-lib/components'
 import AccountSelector from './AccountSelector'
 import FiatRampsModule from './FiatRampsModule'
 import TransferTx from './TransferTx'
-// import ProofDownloadModule from './ProofDownload'
+import ProofDownloadModule from './ProofDownload'
 
 function Main() {
   const { apiState, apiError, keyringState } = useSubstrateState()
@@ -57,17 +58,36 @@ function Main() {
         <AccountSelector />
       </Sticky>
       <Container>
-        <Grid centered stackable columns="equal">
-          <Grid.Row>
-            <FiatRampsModule />
-          </Grid.Row>
-          <Grid.Row>
-            <TransferTx />
-          </Grid.Row>
-        </Grid>
-        <Grid.Row>
-          <ProofDownloadModule />
-        </Grid.Row>
+        <Routes>
+          {/* Main Page */}
+          <Route
+            path="/"
+            element={
+              <Grid centered stackable columns="equal">
+                <Grid.Row>
+                  <FiatRampsModule />
+                </Grid.Row>
+                <Grid.Row>
+                  <TransferTx />
+                </Grid.Row>
+                <Grid.Row>
+                  <ProofDownloadModule />
+                </Grid.Row>
+              </Grid>
+            }
+          />
+          {/* Proofs-only Page */}
+          <Route
+            path="/proofs"
+            element={
+              <Grid centered stackable columns="equal">
+                <Grid.Row>
+                  <ProofDownloadModule />
+                </Grid.Row>
+              </Grid>
+            }
+          />
+        </Routes>
       </Container>
       <DeveloperConsole />
     </div>
@@ -77,7 +97,9 @@ function Main() {
 export default function App() {
   return (
     <SubstrateContextProvider>
-      <Main />
+      <BrowserRouter>
+        <Main />
+      </BrowserRouter>
     </SubstrateContextProvider>
   )
 }

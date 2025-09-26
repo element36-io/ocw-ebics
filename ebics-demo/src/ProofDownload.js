@@ -1,31 +1,45 @@
-import React, { useState } from 'react'
-import { Button, Message, Grid, Card } from 'semantic-ui-react'
-import { useSubstrateState } from './substrate-lib'
+import React, { useEffect, useState, useRef } from 'react'
+import { Button, Message, Grid, Card, List } from 'semantic-ui-react'
 
-export default function ProofDownloadModule() {
-  const { api } = useSubstrateState()
+export default function StatementsAndProofs() {
+  const [statements, setStatements] = useState([])
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const hasFetched = useRef(false) // Track if fetch has occurred
 
-  const downloadProof = async () => {
+  useEffect(() => {
+    const fetchStatements = async () => {
+      if (hasFetched.current) return // Skip if already fetched
+      hasFetched.current = true
+
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(
+          'http://w.e36.io:8093/ebics/api-v1/bankstatements'
+        )
+        if (!res.ok) throw new Error(`Failed: ${res.status}`)
+        const data = await res.json()
+        setStatements(data)
+      } catch (err) {
+        setError('Failed to fetch statements: ' + err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStatements()
+  }, [])
+
+  const openProof = receiptUrl => {
     try {
-      // Mock API call - replace with actual endpoint
-      const response = await fetch('/api/get-proof')
-      const proofData = await response.json()
-
-      // Create blob and trigger download
-      const blob = new Blob([JSON.stringify(proofData, null, 2)], {
-        type: 'text/plain',
-      })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'zkproof.txt'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
+      // Ensure receiptUrl is absolute; prepend base URL if relative
+      const absoluteUrl = receiptUrl.startsWith('http')
+        ? receiptUrl
+        : `http://w.e36.io:8093/ebics/${receiptUrl}`
+      window.open(absoluteUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
-      setError('Failed to download proof: ' + err.message)
+      setError('Failed to open proof: ' + err.message)
     }
   }
 
@@ -33,13 +47,43 @@ export default function ProofDownloadModule() {
     <Grid.Column>
       <Card fluid>
         <Card.Content>
-          <Card.Header>Download ZK Proof</Card.Header>
+          <Card.Header>Bank Statements</Card.Header>
           <Card.Description>
-            Download the Zero-Knowledge proof for offline verification.
+            View fetched statements and download ZK Proof receipts.
           </Card.Description>
-          <Button primary onClick={downloadProof} style={{ marginTop: '1em' }}>
-            Download Proof
-          </Button>
+
+          {loading && <p>Loading statements…</p>}
+
+          {!loading && statements.length > 0 && (
+            <List divided relaxed>
+              {statements.map((s, idx) => (
+                <List.Item key={idx}>
+                  <List.Icon
+                    name="file alternate outline"
+                    size="large"
+                    verticalAlign="middle"
+                  />
+                  <List.Content>
+                    <List.Header as="a">
+                      Account: {s.account?.iban || 'Unknown'}
+                    </List.Header>
+                    <List.Description>
+                      {s.transactions?.length || 0} transactions
+                    </List.Description>
+                    <Button
+                      primary
+                      size="small"
+                      style={{ marginTop: '0.5em' }}
+                      onClick={() => openProof(s.receiptUrl)}
+                    >
+                      Download Proof
+                    </Button>
+                  </List.Content>
+                </List.Item>
+              ))}
+            </List>
+          )}
+
           {error && (
             <Message negative>
               <Message.Header>Error</Message.Header>

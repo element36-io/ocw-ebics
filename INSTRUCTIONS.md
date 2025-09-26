@@ -121,6 +121,23 @@ Submit the sudo call, and this should be the last step of preparation. If succes
 
 ### Hyperfridge
 
+### Fetch proofs for transfers
+
+By running a local [`ebics-demo`](./ebics-demo), you can also fetch proofs for transfers. And you can verify them using the hyperfridge verifier.
+
+Start the Demo React app:
+
+```
+cd ebics-demo
+yarn && yarn start
+```
+
+Go to http://localhost:8000/proofs and you will see empty statements:
+
+For new statement to appear, we need to trigger a transfer. The easiest way is by creating an order in the Swagger UI for EBICS API. Simply repeat the step at [Stablecoins are minted to Alice] section below.
+
+Then you can download the proofs as json:
+
 #### Image ID
 
 And you also need to get the image ID of the `hyperfridge` `riscv0` module. You can get it by running the following command:
@@ -178,7 +195,6 @@ Stablecoin pallet is just another instance of `pallet_balances` and it is a repr
 
 <img width="1347" alt="Screenshot 2024-06-03 at 3 40 39" src="https://github.com/element36-io/ocw-ebics/assets/88332432/1464240e-1a37-4148-8e97-bde4e7da057a">
 
-
 #### Stablecoins are minted to Alice
 
 Stablecoins are minted only when offchain worker detects an incoming transaction from an unknown IBAN address, i.e from an IBAN address is not mapped to any on-chain account address. In order to see how it works in action, head over to the EBICS service [API](http://w.e36.io:8093/ebics/swagger-ui/?url=/ebics/v2/api-docs/#/). Open `/ebics/api-v1/createOrder` tab and fill out Bob's details. Namely, we will fill `purpose` field with Alice's on-chain account and `receipientIban` field with her IBAN number. Fill out Bob's IBAN from above JSON file as the `sourceIban`. Finally, use these values and execute the call:
@@ -231,7 +247,7 @@ sourceIban: CH2108307000289537320
 
 ![Alice transfer to Jack](/assets/alice-transfers-jack-zk.png)
 
-This will create a new order and will end up in Alice's bank statement as an outgoing transaction. And when our offchain worker queries bank statements, it will parse Jack's on-chain account from `reference` field or query it from storage using his IBAN number. Note that transfer on-chain won't happen instantly, since offchain worker performs activities within a minimum of 5 block times interval (~30 seconds) and there are 3 types of actions. So, there is around 90 seconds of time between each new bank statements processing. 
+This will create a new order and will end up in Alice's bank statement as an outgoing transaction. And when our offchain worker queries bank statements, it will parse Jack's on-chain account from `reference` field or query it from storage using his IBAN number. Note that transfer on-chain won't happen instantly, since offchain worker performs activities within a minimum of 5 block times interval (~30 seconds) and there are 3 types of actions. So, there is around 90 seconds of time between each new bank statements processing.
 
 Once offchain worker has processed new statements, two `Transfer` events occur:
 

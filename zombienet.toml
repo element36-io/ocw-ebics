@@ -13,7 +13,7 @@ chain = "westend-local"
 	validator = true
 	extra_args = [ "-lparachain=debug" ]
 
-	[[relaychain.nodes]] 
+	[[relaychain.nodes]]
 	name = "relay-3"
 	validator = true
 	ws_port = 9902
@@ -51,7 +51,7 @@ add_to_genesis = true
     [[parachains.collators]]
     name = "hyperfridge-1"
     validator = true
-    command = "~/.cargo/target/release/node-template"
+    command = "./target/release/node-template"
 	args = ["-lxcm=trace"]
 	register_para = true
 
@@ -59,18 +59,18 @@ add_to_genesis = true
     [[parachains.collators]]
     name = "hyperfridge-2"
     validator = true
-    command = "~/.cargo/target/release/node-template"
+    command = "./target/release/node-template"
 	args = ["-lxcm=trace"]
 	register_para = true
 
-#[[hrmp_channels]]
-#sender = 1000
-#recipient = 2000
-#max_capacity = 5
-#max_message_size = 4096
+# [[hrmp_channels]]
+# sender = 1000
+# recipient = 2000
+# max_capacity = 5
+# max_message_size = 4096
 
-#[[hrmp_channels]]
-#sender = 2000
-#recipient = 1000
-#max_capacity = 5
-#max_message_size = 4096
+# [[hrmp_channels]]
+# sender = 2000
+# recipient = 1000
+# max_capacity = 5
+# max_message_size = 4096

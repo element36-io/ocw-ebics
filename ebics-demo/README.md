@@ -1,4 +1,4 @@
-# Ebics Demo 
+# Ebics Demo
 
 This React application showcases FIAT on/off-ramp Substrate chain in action. Consists of a main page where users can donate to a recipient, and a recipient page where the recipient can withdraw the funds to their bank account.
 
@@ -35,6 +35,8 @@ Some environment variables are read and integrated in the template `config` obje
 including:
 
 - `REACT_APP_PROVIDER_SOCKET` overriding `config[PROVIDER_SOCKET]`
+
+NOTE: You should override this with the zombienet hyperfridge parachain instances RPC.
 
 More on [React environment variables](https://create-react-app.dev/docs/adding-custom-environment-variables).
 
