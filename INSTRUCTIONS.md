@@ -142,6 +142,8 @@ Then you can download the proofs as json:
 
 <img width="1516" height="881" alt="Screenshot 2025-09-27 at 01 28 50" src="https://github.com/user-attachments/assets/973642e6-8227-4dfc-bfa0-87279727fc2d" />
 
+NOTE: Due to the nature of EBICS API, bank statement can only be fetched once. Subsequent requests will return empty response unless new transaction has occurred. If you go further down this guide, you will have OCW "competing" with you to fetch the statements, so you might have some unexpected results. But most of the times, fetching in UI is faster than the OCW.
+
 #### Image ID
 
 And you also need to get the image ID of the `hyperfridge` `riscv0` module. You can get it by running the following command:
