@@ -16,7 +16,7 @@ use frame_support::{
 	PalletId,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use pallet_asset_conversion_tx_payment::AssetConversionAdapter;
+use pallet_asset_conversion_tx_payment::SwapAssetAdapter;
 use pallet_xcm::XcmPassthrough;
 pub use parachains_common::AccountId;
 use parachains_common::{
@@ -33,7 +33,7 @@ use sp_runtime::{
 	Permill,
 };
 use sp_std::prelude::*;
-use staging_xcm::latest::prelude::*;
+use staging_xcm::latest::{prelude::*, WESTEND_GENESIS_HASH};
 use staging_xcm_builder::{
 	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowKnownQueryResponses,
 	AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, DenyReserveTransferToRelayChain,
@@ -43,8 +43,8 @@ use staging_xcm_builder::{
 	ParentAsSuperuser, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
 	SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
 	SovereignSignedViaLocation, StartsWith, StartsWithExplicitGlobalConsensus, TakeWeightCredit,
-	TrailingSetTopicAsId, UsingComponents, WithComputedOrigin, XcmFeeManagerFromComponents,
-	XcmFeeToAccount,
+	SendXcmFeeToAccount, TrailingSetTopicAsId, UsingComponents, WithComputedOrigin,
+	XcmFeeManagerFromComponents,
 };
 use staging_xcm_executor::{traits::WithOriginFilter, XcmExecutor};
 use testnet_parachains_constants::westend::{
@@ -104,6 +104,7 @@ impl pallet_balances::Config for Runtime {
 	type RuntimeFreezeReason = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ConstU32<0>;
+	type DoneSlashHandler = ();
 }
 
 parameter_types! {
@@ -113,11 +114,12 @@ parameter_types! {
 
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<Balances, ()>;
+	type OnChargeTransaction = pallet_transaction_payment::FungibleAdapter<Balances, ()>;
 	type WeightToFee = WeightToFee;
 	type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
 	type FeeMultiplierUpdate = SlowAdjustingFeeUpdate<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -202,9 +204,9 @@ pub type LocalAndForeignAssets = fungibles::UnionOf<
 	LocalFromLeft<
 		AssetIdForTrustBackedAssetsConvert<TrustBackedAssetsPalletLocationV3>,
 		AssetIdForTrustBackedAssets,
-		staging_xcm::v3::Location,
+		staging_xcm::v5::Location,
 	>,
-	staging_xcm::v3::Location,
+	staging_xcm::v5::Location,
 	AccountId,
 >;
 
@@ -212,20 +214,29 @@ pub type LocalAndForeignAssets = fungibles::UnionOf<
 pub type NativeAndAssets = fungible::UnionOf<
 	Balances,
 	LocalAndForeignAssets,
-	TargetFromLeft<WestendLocationV3, staging_xcm::v3::Location>,
-	staging_xcm::v3::Location,
+	TargetFromLeft<WestendLocationV3, staging_xcm::v5::Location>,
+	staging_xcm::v5::Location,
 	AccountId,
+>;
+
+pub type PoolIdToAccountId = pallet_asset_conversion::AccountIdConverter<
+	AssetConversionPalletId,
+	(staging_xcm::v5::Location, staging_xcm::v5::Location),
 >;
 
 impl pallet_asset_conversion::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
 	type HigherPrecisionBalance = u128;
-	type AssetKind = staging_xcm::v3::Location;
+	type AssetKind = staging_xcm::v5::Location;
 	type Assets = NativeAndAssets;
 	type PoolId = (Self::AssetKind, Self::AssetKind);
-	type PoolLocator =
-		pallet_asset_conversion::WithFirstAsset<WestendLocationV3, AccountId, Self::AssetKind>;
+	type PoolLocator = pallet_asset_conversion::WithFirstAsset<
+		WestendLocationV3,
+		AccountId,
+		Self::AssetKind,
+		PoolIdToAccountId,
+	>;
 	type PoolAssetId = u32;
 	type PoolAssets = PoolAssets;
 	type PoolSetupFee = ConstU128<0>; // Asset class deposit fees are sufficient to prevent spam
@@ -238,12 +249,7 @@ impl pallet_asset_conversion::Config for Runtime {
 	type MintMinLiquidity = ConstU128<100>;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = assets_common::benchmarks::AssetPairFactory<
-		WestendLocationV3,
-		parachain_info::Pallet<Runtime>,
-		xcm_config::TrustBackedAssetsPalletIndex,
-		xcm::v3::Location,
-	>;
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
@@ -264,14 +270,14 @@ pub type ForeignAssetsInstance = pallet_assets::Instance2;
 impl pallet_assets::Config<ForeignAssetsInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
-	type AssetId = staging_xcm::v3::Location;
-	type AssetIdParameter = staging_xcm::v3::Location;
+	type AssetId = staging_xcm::v5::Location;
+	type AssetIdParameter = staging_xcm::v5::Location;
 	type Currency = Balances;
 	type CreateOrigin = ForeignCreators<
-		FromSiblingParachain<staging_parachain_info::Pallet<Runtime>, staging_xcm::v3::Location>,
+		FromSiblingParachain<staging_parachain_info::Pallet<Runtime>, staging_xcm::v5::Location>,
 		ForeignCreatorsSovereignAccountOf,
 		AccountId,
-		staging_xcm::v3::Location,
+		staging_xcm::v5::Location,
 	>;
 	type ForceOrigin = AssetsForceOrigin;
 	type AssetDeposit = ForeignAssetsAssetDeposit;
@@ -302,9 +308,12 @@ parameter_types! {
 
 impl pallet_asset_conversion_tx_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Fungibles = LocalAndForeignAssets;
+	type AssetId = staging_xcm::v5::Location;
 	type OnChargeAssetTransaction =
-		AssetConversionAdapter<Balances, AssetConversion, WestendLocationV3>;
+		SwapAssetAdapter<WestendLocationV3, NativeAndAssets, AssetConversion, ()>;
+	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -339,8 +348,8 @@ pub type Block = frame_system::mocking::MockBlock<Runtime>;
 
 parameter_types! {
 	pub const WestendLocation: Location = Location::parent();
-	pub const WestendLocationV3: staging_xcm::v3::Location = staging_xcm::v3::Location::parent();
-	pub const RelayNetwork: Option<NetworkId> = Some(NetworkId::Westend);
+	pub const WestendLocationV3: staging_xcm::v5::Location = staging_xcm::v5::Location::parent();
+	pub const RelayNetwork: Option<NetworkId> = Some(NetworkId::ByGenesis(WESTEND_GENESIS_HASH));
 	pub RelayChainOrigin: RuntimeOrigin = cumulus_pallet_xcm::Origin::Relay.into();
 	pub UniversalLocation: InteriorLocation =
 		[GlobalConsensus(RelayNetwork::get().unwrap()), Parachain(ParachainInfo::parachain_id().into())].into();
@@ -348,14 +357,14 @@ parameter_types! {
 	pub TrustBackedAssetsPalletLocation: Location =
 		PalletInstance(TrustBackedAssetsPalletIndex::get()).into();
 	pub TrustBackedAssetsPalletIndex: u8 = <Assets as PalletInfoAccess>::index() as u8;
-	pub TrustBackedAssetsPalletLocationV3: staging_xcm::v3::Location =
-	staging_xcm::v3::Junction::PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
+	pub TrustBackedAssetsPalletLocationV3: staging_xcm::v5::Location =
+	staging_xcm::v5::Junction::PalletInstance(<Assets as PalletInfoAccess>::index() as u8).into();
 	pub ForeignAssetsPalletLocation: Location =
 		PalletInstance(<ForeignAssets as PalletInfoAccess>::index() as u8).into();
 	pub PoolAssetsPalletLocation: Location =
 		PalletInstance(<PoolAssets as PalletInfoAccess>::index() as u8).into();
-	pub PoolAssetsPalletLocationV3: staging_xcm::v3::Location =
-	staging_xcm::v3::Junction::PalletInstance(<PoolAssets as PalletInfoAccess>::index() as u8).into();
+	pub PoolAssetsPalletLocationV3: staging_xcm::v5::Location =
+	staging_xcm::v5::Junction::PalletInstance(<PoolAssets as PalletInfoAccess>::index() as u8).into();
 	pub CheckingAccount: AccountId = PolkadotXcm::check_account();
 	pub TreasuryAccount: AccountId = TREASURY_PALLET_ID.into_account_truncating();
 }
@@ -426,6 +435,7 @@ pub type ForeignAssetsConvertedConcreteId = assets_common::ForeignAssetsConverte
 		StartsWithExplicitGlobalConsensus<UniversalLocationNetworkId>,
 	),
 	Balance,
+	staging_xcm::v5::Location,
 >;
 
 /// Means for transacting foreign assets from different global consensus.
@@ -648,7 +658,7 @@ impl staging_xcm_executor::Config for XcmConfig {
 	type AssetExchanger = ();
 	type FeeManager = XcmFeeManagerFromComponents<
 		WaivedLocations,
-		XcmFeeToAccount<Self::AssetTransactor, AccountId, TreasuryAccount>,
+		SendXcmFeeToAccount<Self::AssetTransactor, TreasuryAccount>,
 	>;
 	type MessageExporter = ();
 	type UniversalAliases = Nothing;
@@ -656,6 +666,10 @@ impl staging_xcm_executor::Config for XcmConfig {
 	type SafeCallFilter = Everything;
 	type Aliasers = Nothing;
 	type TransactionalProcessor = FrameTransactionalProcessor;
+	type HrmpNewChannelOpenRequestHandler = ();
+	type HrmpChannelAcceptedHandler = ();
+	type HrmpChannelClosingHandler = ();
+	type XcmRecorder = ();
 }
 
 /// Local origins on this chain are allowed to dispatch XCM sends/executions.

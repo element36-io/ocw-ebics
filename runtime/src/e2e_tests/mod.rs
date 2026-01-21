@@ -30,17 +30,19 @@ use staging_xcm::latest::{
 	Junction::{AccountId32, Parachain},
 	Junctions::X1,
 	Location as MultiLocation,
+	NetworkId,
 	WeightLimit::Unlimited,
 	WildAsset::All,
 	Xcm,
+	WESTEND_GENESIS_HASH,
 };
 use xcm_simulator::{Junctions::Here, TestExt};
 
 /// Our location in the network
-fn our_location() -> staging_xcm::v3::Location {
-	staging_xcm::v3::Location {
+fn our_location() -> MultiLocation {
+	MultiLocation {
 		parents: 1,
-		interior: staging_xcm::v3::Junctions::X1(staging_xcm::v3::Junction::Parachain(2000)),
+		interior: [Parachain(2000)].into(),
 	}
 }
 
@@ -57,7 +59,7 @@ fn our_location() -> staging_xcm::v3::Location {
 /// - Transacts the call
 /// - Deposits surplus asset to ALITH
 pub(crate) fn transact<Runtime: pallet_xcm::Config>(dest: MultiLocation, encoded_call: Vec<u8>) {
-	let xcm_call = staging_xcm::opaque::VersionedXcm::V4(Xcm(vec![
+	let xcm_call = staging_xcm::opaque::VersionedXcm::V5(Xcm(vec![
 		WithdrawAsset(
 			vec![MultiAsset {
 				id: MultiLocation { parents: 1, interior: Here }.into(),
@@ -74,7 +76,7 @@ pub(crate) fn transact<Runtime: pallet_xcm::Config>(dest: MultiLocation, encoded
 		},
 		Transact {
 			origin_kind: OriginKind::Superuser,
-			require_weight_at_most: Weight::from_parts(20_000_000_000, 1024 * 1024),
+			fallback_max_weight: Some(Weight::from_parts(20_000_000_000, 1024 * 1024)),
 			call: encoded_call.into(),
 		},
 		DepositAsset {
@@ -178,7 +180,7 @@ fn ebics_para_teleport_to_asset_hub_and_back() {
 			Box::new(
 				MultiLocation {
 					parents: 0,
-					interior: AccountId32 { network: Some(NetworkId::Westend), id: BOB.into() }
+					interior: AccountId32 { network: Some(NetworkId::ByGenesis(WESTEND_GENESIS_HASH)), id: BOB.into() }
 						.into()
 				}
 				.into(),
@@ -254,7 +256,7 @@ fn local_xcm_execution_is_filtered_out() {
 	EbicsPara::execute_with(|| {
 		assert!(EbicsParachainXcm::execute(
 			RuntimeOrigin::root(),
-			Box::new(VersionedXcm::V4(Xcm(vec![
+			Box::new(VersionedXcm::V5(Xcm(vec![
 				WithdrawAsset(
 					vec![MultiAsset { id: MultiLocation::here().into(), fun: Fungible(UNIT) }]
 						.into(),
@@ -265,7 +267,7 @@ fn local_xcm_execution_is_filtered_out() {
 				},
 				Transact {
 					origin_kind: OriginKind::SovereignAccount,
-					require_weight_at_most: Weight::from_parts(1_000_000_000, 1024 * 1024),
+					fallback_max_weight: Some(Weight::from_parts(1_000_000_000, 1024 * 1024)),
 					call: vec![].into(),
 				},
 				DepositAsset {

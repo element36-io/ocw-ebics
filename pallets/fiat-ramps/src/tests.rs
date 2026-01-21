@@ -89,10 +89,10 @@ fn test_processing(statement_type: StatementTypes, response_type: ResponseTypes)
 						assert!(pool_state.read().transactions.is_empty());
 
 						let tx = Extrinsic::decode(&mut &*tx).unwrap();
-						assert_eq!(tx.signature.unwrap().0, 0);
+						assert!(tx.is_signed());
 
 						assert_eq!(
-							tx.call,
+							tx.function,
 							crate::Call::queue_statements {
 								receipt_url: parsed_response.clone().unwrap().receipt_url,
 								statements: parsed_response.unwrap().statements,
@@ -292,17 +292,17 @@ fn test_verify_queued_statements_works() {
 		let tx_in_pool = pool_state.write().transactions.pop().unwrap();
 		let tx = Extrinsic::decode(&mut &*tx_in_pool).unwrap();
 
-		assert_eq!(tx.signature.unwrap().0, 0);
+		assert!(tx.is_signed());
 
 		let statements = if let RuntimeCall::FiatRampsExample(crate::Call::queue_statements {
 			receipt_url,
 			statements,
-		}) = tx.call
+		}) = tx.function
 		{
 			assert_eq!(receipt_url, parsed_response.clone().unwrap().receipt_url);
 			statements
 		} else {
-			panic!("Unexpected call: {:?}", tx.call);
+			panic!("Unexpected call: {:?}", tx.function);
 		};
 
 		assert!(parsed_response.clone().unwrap().statements.len() > 0);
@@ -323,7 +323,7 @@ fn test_verify_queued_statements_works() {
 		let tx = Extrinsic::decode(&mut &*tx_in_pool).unwrap();
 
 		assert!(matches!(
-			tx.call,
+			tx.function,
 			RuntimeCall::FiatRampsExample(crate::Call::process_statements { .. })
 		));
 	});

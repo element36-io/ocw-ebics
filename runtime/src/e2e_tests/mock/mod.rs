@@ -171,11 +171,9 @@ pub fn relay_ext() -> sp_io::TestExternalities {
 			asset_hub::Runtime,
 			ForeignAssetsInstance,
 		>::force_create {
-			id: staging_xcm::v3::Location {
+			id: staging_xcm::v5::Location {
 				parents: 1,
-				interior: staging_xcm::v3::Junctions::X1(staging_xcm::v3::Junction::Parachain(
-					2000,
-				)),
+				interior: [staging_xcm::v5::Junction::Parachain(2000)].into(),
 			},
 			owner: sibling_para_account_id(2000).into(),
 			min_balance: UNIT / 1_000_000_000_000,

@@ -10,7 +10,6 @@ This demo is a decentralized application that allows users to buy someone a coff
 
 To get started, obviously make sure you have the necessary setup for Substrate development. Go through the main [README.md](../README.md) file to get started.
 
-
 ### Frontend
 
 To run the website, go through it's [README.md](./README.md) file.
@@ -49,7 +48,7 @@ Below is the mapping between the users and their bank accounts:
 
 ```json
 {
-[ 
+[
     {
     "ownerName" : "Jack",
     "iban" : "CH2108307000289537313",
